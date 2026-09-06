@@ -1,0 +1,12 @@
+{
+  "id": "001",
+  "nome": "Nova conversa",
+  "instrucoes": "",
+  "modelo": "qwen2.5:0.5b",
+  "memoria": [],
+  "mensagens": [],
+  "metadata": {
+    "created_at": null,
+    "updated_at": null
+  }
+}
