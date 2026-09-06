@@ -5,41 +5,40 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#001f3d">
   <title>Korczak AI</title>
-  <link rel="stylesheet" href="style.css?v=3">
+  <link rel="stylesheet" href="style.css?v=4">
 </head>
 <body>
   <div class="app">
-    <aside class="sidebar">
+    <aside class="sidebar" aria-label="Barra lateral">
       <div class="logo">Korczak AI</div>
-      <button class="new-chat" id="new-chat"><span>＋</span> Novo chat <kbd>CTRL K</kbd></button>
-      <div class="search"><span>⌕</span><input id="search" placeholder="Pesquisar chats"></div>
+      <button class="new-chat" id="new-chat" type="button"><span>＋</span> Novo chat <kbd>CTRL K</kbd></button>
+      <div class="search"><span>⌕</span><input id="search" type="search" placeholder="Pesquisar chats" autocomplete="off"></div>
 
       <div class="label">CHATS</div>
       <div class="chats" id="chat-list">
-        <button class="group">⌄ <span>🌎</span> Mundo Real</button>
-        <button class="chat-item active"><small>001</small> Mundo 001</button>
-        <button class="chat-item"><small>001</small> Nova conversa</button>
-        <button class="chat-item"><small>002</small> Mundo 002</button>
-        <button class="chat-item"><small>003</small> Mundo 003</button>
-        <button class="chat-item"><small>004</small> Nova conversa</button>
-        <button class="group">⌄ <span>✨</span> Mundo Fantasia</button>
+        <button class="group" type="button">⌄ <span>💬</span> Chats</button>
+        <button class="chat-item active" type="button"><small>001</small> Chat 001</button>
+        <button class="chat-item" type="button"><small>002</small> Chat 002</button>
+        <button class="chat-item" type="button"><small>003</small> Chat 003</button>
+        <button class="chat-item" type="button"><small>004</small> Chat 004</button>
+        <button class="chat-item" type="button"><small>005</small> Nova conversa</button>
       </div>
 
       <div class="bottom">
-        <button><span>▤</span> Fontes</button>
-        <button><span>▥</span> Memória</button>
-        <button><span>⚙</span> Configurações</button>
+        <button type="button"><span>▤</span> Fontes</button>
+        <button type="button"><span>▥</span> Memória</button>
+        <button type="button"><span>⚙</span> Configurações</button>
         <div class="profile"><i>K</i><span>Korczak AI</span><b>•••</b></div>
       </div>
     </aside>
 
     <main class="main">
       <header class="header">
-        <button class="title">Nova conversa <span>⌄</span></button>
-        <button class="expand">↗</button>
+        <button class="title" type="button">Nova conversa <span>⌄</span></button>
+        <button class="expand" type="button" aria-label="Expandir">↗</button>
       </header>
 
-      <section class="messages" id="chat">
+      <section class="messages" id="chat" aria-live="polite">
         <div class="welcome" id="welcome-state">
           <div class="mark">K</div>
           <h1>Como posso ajudar?</h1>
@@ -49,11 +48,11 @@
 
       <div class="composer-area">
         <form class="composer" id="composer">
-          <textarea id="message" rows="1" placeholder="Mensagem para o Korczak AI" required></textarea>
+          <textarea id="message" rows="1" placeholder="Mensagem para o Korczak AI" autocomplete="off" required></textarea>
           <div class="composer-row">
-            <button class="add" type="button">＋</button>
+            <button class="add" type="button" aria-label="Adicionar">＋</button>
             <span>Enter para enviar</span>
-            <button class="send" id="send" type="submit">↑</button>
+            <button class="send" id="send" type="submit" aria-label="Enviar">↑</button>
           </div>
         </form>
         <div class="notice"><span id="status">Online</span> · O Korczak AI pode cometer erros. Verifique informações importantes.</div>
