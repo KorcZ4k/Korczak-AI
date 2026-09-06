@@ -19,6 +19,7 @@ from pymongo import MongoClient
 from guardrail import SYSTEM_GUARDRAIL, audit, inspect_input, inspect_output
 from identity import KORCZAK_IDENTITY
 from json_db import create_chat, delete_chat, get_chat, list_chats, update_chat
+from knowledge import knowledge_prompt
 
 app = Flask(__name__)
 
@@ -335,7 +336,7 @@ def chat_endpoint(user):
     last_user_message = next((item["content"] for item in reversed(clean_messages) if item["role"] == "user"), "")
     search_results = web_search(last_user_message) if should_search(last_user_message) else []
 
-    context_parts = [SYSTEM_GUARDRAIL, KORCZAK_IDENTITY]
+    context_parts = [SYSTEM_GUARDRAIL, KORCZAK_IDENTITY, knowledge_prompt()]
     if instructions:
         context_parts.append("INSTRUÇÕES DESTE CHAT:\n" + instructions[:8000])
     if memory:
