@@ -17,7 +17,6 @@ from json_db import create_chat, delete_chat, get_chat, list_chats, update_chat
 
 app = Flask(__name__)
 CORS(app, resources={r"/api/*": {"origins": "*"}}, allow_headers=["Content-Type", "Authorization"], methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"])
-
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 DEFAULT_MODEL = os.getenv("MODEL", "qwen2.5:0.5b")
 MONGODB_URI = os.getenv("MONGODB_URI", "").strip()
@@ -25,14 +24,12 @@ MONGODB_DATABASE = "KorczakControl"
 MONGODB_COLLECTION = os.getenv("MONGODB_COLLECTION", "Users").strip() or "Users"
 SECRET_KEY = os.getenv("SECRET_KEY", "").strip() or (hashlib.sha256(MONGODB_URI.encode()).hexdigest() if MONGODB_URI else secrets.token_urlsafe(32))
 TOKEN_MAX_AGE = int(os.getenv("AUTH_TOKEN_MAX_AGE", "604800"))
-
 SYSTEM_PROMPT = os.getenv("SYSTEM_PROMPT", """Você é a Korczak AI, um assistente avançado, claro, preciso e amigável.
 Seu objetivo é extrair o máximo útil das capacidades disponíveis do modelo sem inventar capacidades que não existem.
 Raciocine cuidadosamente antes de responder, mantenha o contexto da conversa, confira consistência, diferencie fatos de hipóteses e seja transparente sobre incerteza.
 Quando uma pergunta exigir dados atuais, ferramentas externas ou pesquisa que você não possui, diga isso claramente em vez de fabricar resultados.
 Responda em português quando o usuário falar português, salvo pedido contrário.
 """)
-
 _serializer = URLSafeTimedSerializer(SECRET_KEY, salt="korczak-ai-auth-v1")
 _mongo_client = None
 _users = None
@@ -116,19 +113,16 @@ def login():
     password = data.get("password")
     if not email or not isinstance(password, str) or not password:
         return jsonify({"error": "Você não está na lista de testes."}), 401
-
     user, error = find_test_user(email)
     if error:
         return jsonify({"error": "Autenticação indisponível. Verifique a conexão com o MongoDB."}), 503
     if not user:
         audit("login_denied", user=email, allowed=False, reason="not_in_test_list")
         return jsonify({"error": "Você não está na lista de testes."}), 401
-
     stored_hash = password_hash_from_user(user)
     if not stored_hash:
         audit("login_denied", user=email, allowed=False, reason="missing_bcrypt_hash")
         return jsonify({"error": "Você não está na lista de testes."}), 401
-
     try:
         valid = bcrypt.checkpw(password.encode("utf-8"), stored_hash.encode("utf-8"))
     except (ValueError, TypeError):
@@ -136,7 +130,6 @@ def login():
     if not valid:
         audit("login_denied", user=email, allowed=False, reason="invalid_password")
         return jsonify({"error": "Você não está na lista de testes."}), 401
-
     audit("login_success", user=email)
     return jsonify({"authenticated": True, "token": make_token(email), "user": {"email": user.get("email", email), "name": user.get("name") or user.get("nome") or email.split("@")[0]}})
 
@@ -185,7 +178,7 @@ def read_chat(user, chat_id):
 @auth_required
 def patch_chat(user, chat_id):
     data = request.get_json(silent=True) or {}
-    allowed = {key: data[key] for key in ("nome", "instrucoes", "modelo", "memoria", "mensagens") if key in data}
+    allowed = {key: data[key] for key in ("nome", "instrucoes", "modelo", "memoria", "fontes", "mensagens") if key in data}
     chat = update_chat(chat_id, user, **allowed)
     if not chat:
         return jsonify({"error": "Chat não encontrado"}), 404
@@ -222,30 +215,26 @@ def chat(user):
     chat_id = str(data.get("chat_id", "")).strip() or None
     if not isinstance(messages, list) or not messages:
         return jsonify({"error": "messages deve ser uma lista não vazia"}), 400
-
     clean_messages = clean_history(messages)
     if not clean_messages:
         return jsonify({"error": "Nenhuma mensagem válida"}), 400
-
     for message in clean_messages:
         if message["role"] == "user":
             allowed, reason = inspect_input(message["content"])
             audit("guardrail_input", user=user, chat_id=chat_id, allowed=allowed, reason=reason, text=message["content"])
             if not allowed:
                 return jsonify({"error": reason}), 400
-
     chat_record = get_chat(chat_id, user) if chat_id else None
     if chat_id and not chat_record:
         return jsonify({"error": "Chat não encontrado"}), 404
-
     selected_model = (chat_record or {}).get("modelo") or DEFAULT_MODEL
     instructions = (chat_record or {}).get("instrucoes", "").strip()
     memory = (chat_record or {}).get("memoria", [])
+    sources = (chat_record or {}).get("fontes", [])
     memory_text = "\n".join(f"- {item}" for item in memory if isinstance(item, str)) or "Nenhuma memória persistente registrada."
-    system_prompt = f"{SYSTEM_GUARDRAIL}\n\n{SYSTEM_PROMPT}\n\nINSTRUÇÕES DO CHAT:\n{instructions or 'Nenhuma instrução específica.'}\n\nMEMÓRIA DO CHAT:\n{memory_text}"
-
+    source_text = "\n".join(f"- {item.get('name')}: {item.get('content', '')[:6000]}" for item in sources if isinstance(item, dict)) or "Nenhuma fonte anexada."
+    system_prompt = f"{SYSTEM_GUARDRAIL}\n\n{SYSTEM_PROMPT}\n\nINSTRUÇÕES DO CHAT:\n{instructions or 'Nenhuma instrução específica.'}\n\nMEMÓRIA DO CHAT:\n{memory_text}\n\nFONTES LOCAIS DO CHAT:\n{source_text}"
     payload = {"model": selected_model, "messages": [{"role": "system", "content": system_prompt}] + clean_messages, "stream": True, "options": {"temperature": 0.35, "num_ctx": 8192}}
-
     try:
         ollama_response = requests.post(f"{OLLAMA_BASE_URL.rstrip('/')}/api/chat", json=payload, stream=True, timeout=(10, 600))
         ollama_response.raise_for_status()
@@ -280,7 +269,6 @@ def chat(user):
                     update_chat(chat_id, user, mensagens=current["mensagens"])
         finally:
             ollama_response.close()
-
     return Response(generate(), mimetype="application/x-ndjson", headers={"Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no", "Connection": "keep-alive"})
 
 
