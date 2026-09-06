@@ -4,6 +4,7 @@ import json
 import os
 import re
 import secrets
+import time
 from functools import wraps
 from pathlib import Path
 from urllib.parse import quote_plus, urlparse
@@ -20,10 +21,6 @@ from json_db import create_chat, delete_chat, get_chat, list_chats, update_chat
 
 app = Flask(__name__)
 
-# GitHub Pages -> Render is a cross-origin request. Keep CORS explicit but
-# resilient: FRONTEND_ORIGIN may contain one origin, several comma-separated
-# origins, or * for development. Authentication uses Authorization headers,
-# not browser cookies, so wildcard CORS is safe for this API shape.
 FRONTEND_ORIGIN = os.getenv("FRONTEND_ORIGIN", "*").strip() or "*"
 if FRONTEND_ORIGIN != "*":
     FRONTEND_ORIGIN = [item.strip().rstrip("/") for item in FRONTEND_ORIGIN.split(",") if item.strip()]
@@ -37,6 +34,8 @@ CORS(
 )
 
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434").strip()
+OLLAMA_DISCOVERY_URL = os.getenv("OLLAMA_DISCOVERY_URL", "").strip()
+OLLAMA_DISCOVERY_TTL = max(5, int(os.getenv("OLLAMA_DISCOVERY_TTL", "30")))
 DEFAULT_MODEL = os.getenv("MODEL", "qwen2.5:0.5b").strip() or "qwen2.5:0.5b"
 MONGODB_URI = os.getenv("MONGODB_URI", "").strip()
 MONGODB_DATABASE = "KorczakControl"
@@ -45,6 +44,7 @@ SECRET_KEY = os.getenv("SECRET_KEY", "").strip() or (hashlib.sha256(MONGODB_URI.
 TOKEN_MAX_AGE = int(os.getenv("AUTH_TOKEN_MAX_AGE", "604800"))
 SEARCH_ENABLED = os.getenv("WEB_SEARCH_ENABLED", "true").lower() not in {"0", "false", "no"}
 SEARCH_MAX_RESULTS = max(1, min(int(os.getenv("WEB_SEARCH_MAX_RESULTS", "5")), 8))
+_ollama_discovery_cache = {"url": OLLAMA_BASE_URL, "expires": 0.0}
 
 SYSTEM_PROMPT = os.getenv("SYSTEM_PROMPT", """Você é a Korczak AI, um assistente avançado, preciso, útil e intelectualmente honesto.
 Extraia o máximo útil das capacidades disponíveis do modelo.
@@ -58,6 +58,27 @@ Responda em português quando o usuário falar português, salvo pedido contrár
 _serializer = URLSafeTimedSerializer(SECRET_KEY, salt="korczak-ai-auth-v2")
 _mongo_client = None
 _users = None
+
+
+def ollama_base_url():
+    global _ollama_discovery_cache
+    if not OLLAMA_DISCOVERY_URL:
+        return OLLAMA_BASE_URL
+    now_ts = time.time()
+    if _ollama_discovery_cache["expires"] > now_ts and _ollama_discovery_cache["url"]:
+        return _ollama_discovery_cache["url"]
+    try:
+        response = requests.get(OLLAMA_DISCOVERY_URL, timeout=5)
+        response.raise_for_status()
+        data = response.json()
+        discovered = str(data.get("url", "")).strip().rstrip("/")
+        parsed = urlparse(discovered)
+        if parsed.scheme in {"http", "https"} and parsed.netloc:
+            _ollama_discovery_cache = {"url": discovered, "expires": now_ts + OLLAMA_DISCOVERY_TTL}
+            return discovered
+    except (requests.RequestException, ValueError, TypeError) as exc:
+        app.logger.warning("Ollama discovery failed: %s", str(exc)[:300])
+    return _ollama_discovery_cache.get("url") or OLLAMA_BASE_URL
 
 
 def mongo_collection():
@@ -176,7 +197,7 @@ def api_health():
             mongo_ok = True
         except Exception:
             mongo_ok = False
-    return jsonify({"status": "ok", "model": DEFAULT_MODEL, "database": "JSON", "mongodb": mongo_ok, "web_search": SEARCH_ENABLED})
+    return jsonify({"status": "ok", "model": DEFAULT_MODEL, "database": "JSON", "mongodb": mongo_ok, "web_search": SEARCH_ENABLED, "ollama_discovery": bool(OLLAMA_DISCOVERY_URL), "ollama_url": ollama_base_url() if OLLAMA_DISCOVERY_URL else OLLAMA_BASE_URL})
 
 
 @app.post("/api/auth/login")
@@ -337,11 +358,12 @@ def chat_endpoint(user):
     system_prompt = f"{SYSTEM_GUARDRAIL}\n\n{SYSTEM_PROMPT}\n\nINSTRUÇÕES DO CHAT:\n{instructions or 'Nenhuma instrução específica.'}\n\nMEMÓRIA DO CHAT:\n{memory_text}\n\nFONTES LOCAIS:\n{source_text}\n\nPESQUISA WEB:\n{web_text}"
     payload = {"model": selected_model, "messages": [{"role": "system", "content": system_prompt}] + clean_messages, "stream": True, "options": {"temperature": float(preferences.get("temperature", 0.35))}}
 
+    ollama_url = ollama_base_url()
     try:
-        ollama_response = requests.post(f"{OLLAMA_BASE_URL.rstrip('/')}/api/chat", json=payload, stream=True, timeout=(10, 600))
+        ollama_response = requests.post(f"{ollama_url.rstrip('/')}/api/chat", json=payload, stream=True, timeout=(10, 600))
         ollama_response.raise_for_status()
     except requests.RequestException as exc:
-        audit("chat_error", user=user, chat_id=chat_id, reason="ollama_request_failed", metadata={"error": str(exc)[:300]})
+        audit("chat_error", user=user, chat_id=chat_id, reason="ollama_request_failed", metadata={"error": str(exc)[:300], "ollama_url": ollama_url[:200]})
         return jsonify({"error": "Falha ao conectar ao servidor do modelo", "detail": str(exc)}), 502
 
     @stream_with_context
@@ -402,3 +424,7 @@ def not_found(_error):
 def server_error(_error):
     app.logger.exception("Unhandled server error")
     return jsonify({"error": "Erro interno do servidor"}), 500
+
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=int(os.getenv("PORT", "10000")))
