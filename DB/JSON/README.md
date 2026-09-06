@@ -1,26 +1,37 @@
-# Banco de dados JSON
+# Banco de dados JSON da Korczak AI
 
-Estrutura do banco local da Korczak AI:
+O banco de chats usa JSON no servidor da API.
 
 ```text
 DB/
 └── JSON/
     ├── CHAT/
-    │   └── CHATS.json      # índice dos chats
-    └── CHATS/
-        ├── 001.json        # dados completos do chat 001
-        ├── 002.json
-        └── ...
+    │   └── CHATS.json
+    ├── CHATS/
+    │   ├── 001.json
+    │   ├── 002.json
+    │   └── ...
+    └── AUDIT/
+        └── events.jsonl
 ```
 
-Cada chat possui:
+`CHAT/CHATS.json` é o índice global. Cada arquivo em `CHATS/` é isolado por usuário e contém:
 
-- `id`: identificador único com 3 dígitos.
-- `nome`: nome exibido no sidebar.
-- `instrucoes`: instruções específicas do chat.
-- `modelo`: modelo Ollama usado pelo chat.
-- `memoria`: informações persistentes daquele chat.
+- `id`: ID de três dígitos (`001`, `002`, ...).
+- `nome`: nome do chat.
+- `instrucoes`: instruções específicas.
+- `modelo`: modelo Ollama usado.
+- `memoria`: memória manual persistente.
+- `memoria_automatica`: memória criada quando o usuário pede explicitamente para lembrar algo.
+- `fontes`: arquivos de texto anexados ao chat.
+- `fontes_web`: resultados de pesquisa web associados ao chat.
 - `mensagens`: histórico da conversa.
-- `metadata`: datas de criação e atualização.
+- `usuario`: e-mail autenticado dono do chat.
+- `preferencias`: opções do chat, incluindo pesquisa web.
+- `metadata`: criação e última atualização.
 
-O arquivo `CHAT/CHATS.json` funciona como índice e guarda os IDs, nomes e próximo ID disponível.
+A API nunca usa o arquivo JSON como fonte de autenticação. Login é validado exclusivamente na coleção `Users` do MongoDB, no banco `KorczakControl`, comparando a senha recebida com o hash bcrypt armazenado.
+
+## Auditoria
+
+`AUDIT/events.jsonl` registra eventos de autenticação, chats, pesquisa, guard rail e erros. O conteúdo das mensagens não é salvo no log; somente hashes curtos são usados para correlação.
