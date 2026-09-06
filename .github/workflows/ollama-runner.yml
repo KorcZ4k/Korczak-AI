@@ -2,8 +2,12 @@ name: Ollama Runner
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/ollama-runner.yml"
   schedule:
-    - cron: "0 0,5,10,15,20 * * *"
+    - cron: "0 */4 * * *"
 
 permissions:
   contents: write
@@ -38,7 +42,7 @@ jobs:
         run: |
           set -euo pipefail
           nohup ollama serve > /tmp/ollama.log 2>&1 &
-          for i in {1..30}; do
+          for i in {1..60}; do
             if curl -fsS http://127.0.0.1:11434/api/tags >/dev/null; then
               break
             fi
@@ -62,7 +66,7 @@ jobs:
           set -euo pipefail
           nohup /tmp/cloudflared tunnel --no-autoupdate --url http://127.0.0.1:11434 >/tmp/cloudflared.log 2>&1 &
           URL=""
-          for i in {1..60}; do
+          for i in {1..90}; do
             URL="$(grep -Eo 'https://[-a-z0-9]+\.trycloudflare\.com' /tmp/cloudflared.log | head -n 1 || true)"
             if [ -n "$URL" ]; then break; fi
             sleep 2
@@ -78,6 +82,28 @@ jobs:
           git add "$ENDPOINT_FILE"
           git diff --cached --quiet || git commit -m "chore: refresh Ollama endpoint"
           git push
+
+      - name: Verify public Ollama endpoint
+        shell: bash
+        run: |
+          set -euo pipefail
+          URL="$(python - <<'PY'
+          import json
+          with open("ollama-endpoint.json", encoding="utf-8") as f:
+              print(json.load(f)["url"].rstrip("/"))
+          PY
+          )"
+          for i in {1..20}; do
+            if curl -fsS --max-time 10 "$URL/api/tags" >/tmp/public-tags.json; then
+              echo "Public Ollama endpoint is reachable"
+              cat /tmp/public-tags.json
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "Public Ollama endpoint is not reachable"
+          cat /tmp/cloudflared.log || true
+          exit 1
 
       - name: Keep Ollama online
         shell: bash
