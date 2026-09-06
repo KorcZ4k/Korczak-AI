@@ -52,6 +52,7 @@ def _normalize(chat):
     chat.setdefault("instrucoes", "")
     chat.setdefault("modelo", DEFAULT_MODEL)
     chat.setdefault("memoria", [])
+    chat.setdefault("fontes", [])
     chat.setdefault("mensagens", [])
     chat.setdefault("usuario", None)
     chat.setdefault("metadata", {})
@@ -67,12 +68,7 @@ def list_chats(user):
         for item in index["chats"]:
             chat = _normalize(_read(_chat_path(item["id"]), item))
             if chat.get("usuario") == user:
-                result.append({
-                    "id": chat["id"],
-                    "nome": chat["nome"],
-                    "modelo": chat["modelo"],
-                    "metadata": chat["metadata"],
-                })
+                result.append({"id": chat["id"], "nome": chat["nome"], "modelo": chat["modelo"], "metadata": chat["metadata"]})
         return sorted(result, key=lambda x: x["id"], reverse=True)
 
 
@@ -93,16 +89,7 @@ def create_chat(user, name="Nova conversa", instructions="", model=DEFAULT_MODEL
             next_id += 1
         chat_id = f"{next_id:03d}"
         timestamp = now()
-        chat = {
-            "id": chat_id,
-            "nome": name or "Nova conversa",
-            "instrucoes": instructions or "",
-            "modelo": model or DEFAULT_MODEL,
-            "memoria": [],
-            "mensagens": [],
-            "usuario": user,
-            "metadata": {"created_at": timestamp, "updated_at": timestamp},
-        }
+        chat = {"id": chat_id, "nome": name or "Nova conversa", "instrucoes": instructions or "", "modelo": model or DEFAULT_MODEL, "memoria": [], "fontes": [], "mensagens": [], "usuario": user, "metadata": {"created_at": timestamp, "updated_at": timestamp}}
         _write(_chat_path(chat_id), chat)
         index["next_id"] = next_id + 1
         index["chats"].append({"id": chat_id, "nome": chat["nome"], "usuario": user})
@@ -115,7 +102,7 @@ def update_chat(chat_id, user, **changes):
         chat = get_chat(chat_id, user)
         if not chat:
             return None
-        for field in ("nome", "instrucoes", "modelo", "memoria", "mensagens"):
+        for field in ("nome", "instrucoes", "modelo", "memoria", "fontes", "mensagens"):
             if field in changes and changes[field] is not None:
                 chat[field] = changes[field]
         chat["metadata"]["updated_at"] = now()
