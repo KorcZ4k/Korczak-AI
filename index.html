@@ -5,10 +5,24 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#001f3d">
   <title>Korczak AI</title>
-  <link rel="stylesheet" href="style.css?v=5">
+  <link rel="stylesheet" href="style.css?v=6">
 </head>
 <body>
-  <div class="app">
+  <div class="login-screen" id="login-screen">
+    <div class="login-card">
+      <div class="login-mark">K</div>
+      <h1>Korczak AI</h1>
+      <p>Área de testes</p>
+      <form id="login-form" autocomplete="on">
+        <label>E-mail<input id="login-email" type="email" autocomplete="username" required></label>
+        <label>Senha<input id="login-password" type="password" autocomplete="current-password" required></label>
+        <button type="submit" id="login-submit">Entrar</button>
+        <div class="login-error" id="login-error" role="alert"></div>
+      </form>
+    </div>
+  </div>
+
+  <div class="app" id="app" hidden>
     <aside class="sidebar">
       <button class="logo" id="brand" type="button" title="Ir para o início">Korczak AI</button>
       <button class="new-chat" id="new-chat" type="button"><span>＋</span> Novo chat <kbd>CTRL K</kbd></button>
@@ -19,7 +33,7 @@
         <button id="sources" type="button"><span>▤</span> Fontes</button>
         <button id="memory" type="button"><span>▥</span> Memória</button>
         <button id="settings" type="button"><span>⚙</span> Configurações</button>
-        <div class="profile"><i>K</i><span>Korczak AI</span><button id="account-menu" type="button" aria-label="Mais opções">•••</button></div>
+        <div class="profile"><i id="profile-avatar">K</i><span id="profile-name">Korczak AI</span><button id="account-menu" type="button" aria-label="Conta">•••</button></div>
       </div>
     </aside>
 
@@ -41,7 +55,7 @@
         <form class="composer" id="composer">
           <textarea id="message" rows="1" placeholder="Mensagem para o Korczak AI" autocomplete="off" required></textarea>
           <div class="composer-row">
-            <button class="add" id="attach" type="button" aria-label="Adicionar">＋</button>
+            <button class="add" id="attach" type="button" aria-label="Adicionar fonte">＋</button>
             <span>Enter para enviar</span>
             <button class="send" id="send" type="submit" aria-label="Enviar">↑</button>
           </div>
@@ -50,6 +64,8 @@
       </div>
     </main>
   </div>
+
+  <input id="file-input" type="file" hidden accept=".txt,.md,.json,.csv,.log">
   <div class="modal-backdrop" id="modal-backdrop" hidden>
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
       <button class="modal-close" id="modal-close" type="button" aria-label="Fechar">×</button>
@@ -57,6 +73,6 @@
       <div id="modal-content"></div>
     </div>
   </div>
-  <script src="script.js?v=5"></script>
+  <script src="script.js?v=6"></script>
 </body>
 </html>
