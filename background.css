@@ -1,0 +1,27 @@
+/* Korczak AI — background baseado na arte fornecida */
+html, body {
+  background: #06498e url("data:image/webp;base64,UklGRiS2ZAAKAAAASUVORK5CYII=") center center / cover fixed no-repeat !important;
+}
+
+.login-screen,
+.app,
+.main {
+  background-color: transparent !important;
+  background-image: none !important;
+}
+
+.login-screen {
+  background: #06498e url("data:image/webp;base64,UklGRiS2ZAAKAAAASUVORK5CYII=") center center / cover fixed no-repeat !important;
+}
+
+.app {
+  background: transparent !important;
+}
+
+.main {
+  background: rgba(6, 73, 142, 0.16) !important;
+}
+
+.main:before {
+  background: linear-gradient(180deg, rgba(0, 29, 59, .18), rgba(0, 48, 94, .02) 38%, rgba(0, 24, 50, .10)) !important;
+}
