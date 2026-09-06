@@ -23,6 +23,8 @@ jobs:
     env:
       MODEL: qwen2.5:0.5b
       ENDPOINT_FILE: ollama-endpoint.json
+      OLLAMA_HOST: 0.0.0.0:11434
+      OLLAMA_ORIGINS: "*"
 
     steps:
       - name: Checkout
@@ -41,6 +43,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          export OLLAMA_HOST="${OLLAMA_HOST}"
+          export OLLAMA_ORIGINS="${OLLAMA_ORIGINS}"
           nohup ollama serve > /tmp/ollama.log 2>&1 &
           for i in {1..60}; do
             if curl -fsS http://127.0.0.1:11434/api/tags >/dev/null; then
@@ -93,16 +97,19 @@ jobs:
               print(json.load(f)["url"].rstrip("/"))
           PY
           )"
-          for i in {1..20}; do
-            if curl -fsS --max-time 10 "$URL/api/tags" >/tmp/public-tags.json; then
+          for i in {1..40}; do
+            HTTP="$(curl -sS -o /tmp/public-tags.json -w '%{http_code}' --max-time 15 "$URL/api/tags" || true)"
+            if [ "$HTTP" = "200" ]; then
               echo "Public Ollama endpoint is reachable"
               cat /tmp/public-tags.json
               exit 0
             fi
+            echo "Public endpoint check returned HTTP $HTTP; waiting for tunnel propagation..."
             sleep 3
           done
           echo "Public Ollama endpoint is not reachable"
           cat /tmp/cloudflared.log || true
+          cat /tmp/public-tags.json || true
           exit 1
 
       - name: Keep Ollama online
