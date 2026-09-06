@@ -1,0 +1,102 @@
+* { box-sizing: border-box; }
+
+:root {
+  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #e8edf7;
+  background: #0b0f17;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: radial-gradient(circle at top, #182238 0, #0b0f17 48%);
+}
+
+.app {
+  width: min(900px, 100%);
+  height: 100vh;
+  margin: auto;
+  display: flex;
+  flex-direction: column;
+  padding: 18px;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 4px 18px;
+}
+
+h1 { margin: 0; font-size: 1.35rem; }
+.topbar span:not(.status) { color: #8e9ab0; font-size: .8rem; }
+.status { color: #7ee2a8; font-size: .8rem; }
+
+.chat {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.message {
+  max-width: 78%;
+  padding: 12px 15px;
+  border-radius: 16px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.message.user {
+  align-self: flex-end;
+  background: #315fc4;
+  border-bottom-right-radius: 5px;
+}
+
+.message.assistant {
+  align-self: flex-start;
+  background: #171e2b;
+  border: 1px solid #242d3d;
+  border-bottom-left-radius: 5px;
+}
+
+.composer {
+  display: flex;
+  gap: 10px;
+  padding: 12px;
+  background: #121824;
+  border: 1px solid #242d3d;
+  border-radius: 18px;
+}
+
+textarea {
+  flex: 1;
+  resize: none;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  padding: 10px;
+  max-height: 140px;
+}
+
+button {
+  align-self: flex-end;
+  border: 0;
+  border-radius: 12px;
+  padding: 10px 16px;
+  background: #4775dc;
+  color: white;
+  cursor: pointer;
+}
+
+button:disabled { opacity: .5; cursor: wait; }
+.hint { margin: 8px 0 0; text-align: center; color: #66738a; font-size: .72rem; }
+
+@media (max-width: 600px) {
+  .app { padding: 10px; }
+  .message { max-width: 88%; }
+}
