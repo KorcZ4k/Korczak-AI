@@ -16,31 +16,26 @@ const modalClose = document.getElementById("modal-close");
 
 const state = { chats: [], activeId: null, nextId: 1, sending: false };
 
-function saveChats() {
-  localStorage.setItem("korczak_chats", JSON.stringify(state.chats));
+function escapeHtml(text) {
+  const div = document.createElement("div");
+  div.textContent = text;
+  return div.innerHTML;
 }
 
-function loadChats() {
-  try {
-    const saved = JSON.parse(localStorage.getItem("korczak_chats") || "[]");
-    if (Array.isArray(saved)) state.chats = saved;
-  } catch (_) { state.chats = []; }
-  state.nextId = Math.max(1, ...state.chats.map(c => Number(c.id) || 0)) + 1;
-  if (state.chats.length) state.activeId = state.chats[0].id;
+function activeChat() {
+  return state.chats.find(c => String(c.id) === String(state.activeId));
 }
-
-function activeChat() { return state.chats.find(c => c.id === state.activeId); }
 
 function renderChatList() {
   chatList.innerHTML = "";
   const query = search.value.trim().toLowerCase();
-  state.chats.forEach((item) => {
-    if (query && !item.title.toLowerCase().includes(query)) return;
+  state.chats.forEach(item => {
+    const name = item.nome || item.title || "Nova conversa";
+    if (query && !name.toLowerCase().includes(query)) return;
     const button = document.createElement("button");
-    button.className = `chat-item${item.id === state.activeId ? " active" : ""}`;
+    button.className = `chat-item${String(item.id) === String(state.activeId) ? " active" : ""}`;
     button.type = "button";
-    button.dataset.id = item.id;
-    button.innerHTML = `<small>${String(item.id).padStart(3, "0")}</small> ${escapeHtml(item.title)}`;
+    button.innerHTML = `<small>${String(item.id).padStart(3, "0")}</small> ${escapeHtml(name)}`;
     button.addEventListener("click", () => openChat(item.id));
     chatList.appendChild(button);
   });
@@ -50,12 +45,6 @@ function renderChatList() {
     empty.textContent = query ? "Nenhum chat encontrado" : "Nenhum chat ainda";
     chatList.appendChild(empty);
   }
-}
-
-function escapeHtml(text) {
-  const div = document.createElement("div");
-  div.textContent = text;
-  return div.innerHTML;
 }
 
 function addMessage(role, content = "") {
@@ -78,30 +67,76 @@ function renderMessages(messages) {
   messages.forEach(m => addMessage(m.role, m.content));
 }
 
-function createChat() {
-  const item = { id: state.nextId++, title: "Nova conversa", messages: [] };
-  state.chats.unshift(item);
-  state.activeId = item.id;
-  saveChats();
-  renderChatList();
-  renderMessages([]);
-  document.getElementById("conversation-title").firstChild.textContent = "Nova conversa ";
-  input.focus();
+async function apiJson(path, options = {}) {
+  const response = await fetch(`${API_URL}${path}`, {
+    ...options,
+    headers: { "Content-Type": "application/json", ...(options.headers || {}) }
+  });
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  return response.json();
 }
 
-function openChat(id) {
-  state.activeId = id;
-  const item = activeChat();
-  if (!item) return;
-  renderChatList();
-  renderMessages(item.messages);
-  document.getElementById("conversation-title").firstChild.textContent = `${item.title} `;
-  input.focus();
+async function createChat() {
+  try {
+    const item = await apiJson("/api/chats", { method: "POST", body: JSON.stringify({}) });
+    state.chats.unshift(item);
+    state.activeId = item.id;
+    renderChatList();
+    renderMessages([]);
+    setConversationTitle(item.nome);
+    input.focus();
+  } catch (error) {
+    status.textContent = "Banco offline";
+    console.error(error);
+  }
 }
 
-function ensureChat() {
-  if (!activeChat()) createChat();
-  return activeChat();
+async function loadChats() {
+  try {
+    const data = await apiJson("/api/chats");
+    state.chats = data.chats || [];
+    state.nextId = Number(data.next_id || 1);
+    if (state.chats.length) await openChat(state.chats[0].id);
+    else await createChat();
+    status.textContent = "Online · JSON DB";
+  } catch (error) {
+    status.textContent = "API offline";
+    renderChatList();
+    renderMessages([]);
+    console.error(error);
+  }
+}
+
+async function openChat(id) {
+  try {
+    const item = await apiJson(`/api/chats/${encodeURIComponent(id)}`);
+    const index = state.chats.findIndex(c => String(c.id) === String(id));
+    if (index >= 0) state.chats[index] = item;
+    else state.chats.push(item);
+    state.activeId = item.id;
+    renderChatList();
+    renderMessages(item.mensagens || []);
+    setConversationTitle(item.nome);
+    input.focus();
+  } catch (error) {
+    status.textContent = "Não foi possível abrir o chat";
+    console.error(error);
+  }
+}
+
+function setConversationTitle(title) {
+  document.getElementById("conversation-title").firstChild.textContent = `${title || "Nova conversa"} `;
+}
+
+async function updateChat(item, patch) {
+  const updated = await apiJson(`/api/chats/${encodeURIComponent(item.id)}`, {
+    method: "PUT",
+    body: JSON.stringify(patch)
+  });
+  Object.assign(item, updated);
+  renderChatList();
+  setConversationTitle(item.nome);
+  return item;
 }
 
 function hideWelcome() {
@@ -120,11 +155,11 @@ function showModal(title, html) {
 }
 function closeModal() { modalBackdrop.hidden = true; }
 
-async function streamResponse(messages, target) {
+async function streamResponse(messages, target, chatId) {
   const response = await fetch(`${API_URL}/api/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "application/x-ndjson" },
-    body: JSON.stringify({ messages })
+    body: JSON.stringify({ chat_id: chatId, messages })
   });
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
   if (!response.body) throw new Error("Streaming não suportado pelo navegador");
@@ -143,7 +178,11 @@ async function streamResponse(messages, target) {
         if (!line.trim()) continue;
         const chunk = JSON.parse(line);
         const piece = chunk?.message?.content || "";
-        if (piece) { answer += piece; target.textContent = answer; chat.scrollTop = chat.scrollHeight; }
+        if (piece) {
+          answer += piece;
+          target.textContent = answer;
+          chat.scrollTop = chat.scrollHeight;
+        }
       }
     }
     buffer += decoder.decode();
@@ -152,40 +191,64 @@ async function streamResponse(messages, target) {
       answer += chunk?.message?.content || "";
     }
     target.textContent = answer;
-  } finally { target.classList.remove("streaming"); reader.releaseLock(); }
+  } finally {
+    target.classList.remove("streaming");
+    reader.releaseLock();
+  }
   return answer;
 }
 
 input.addEventListener("input", resizeInput);
 input.addEventListener("keydown", event => {
-  if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); form.requestSubmit(); }
+  if (event.key === "Enter" && !event.shiftKey) {
+    event.preventDefault();
+    form.requestSubmit();
+  }
 });
 
 form.addEventListener("submit", async event => {
   event.preventDefault();
   const message = input.value.trim();
   if (!message || state.sending) return;
-  const item = ensureChat();
+  const item = activeChat();
+  if (!item) return;
+
   hideWelcome();
   addMessage("user", message);
-  item.messages.push({ role: "user", content: message });
-  if (item.title === "Nova conversa") {
-    item.title = message.length > 28 ? `${message.slice(0, 28)}…` : message;
-    renderChatList();
-    document.getElementById("conversation-title").firstChild.textContent = `${item.title} `;
+  item.mensagens = item.mensagens || [];
+  item.mensagens.push({ role: "user", content: message });
+
+  if ((item.nome || "Nova conversa") === "Nova conversa") {
+    item.nome = message.length > 28 ? `${message.slice(0, 28)}…` : message;
   }
-  saveChats();
-  input.value = ""; input.style.height = "auto";
-  state.sending = true; send.disabled = true; status.textContent = "Gerando...";
-  const answerElement = addMessage("assistant", "");
+
   try {
-    const answer = await streamResponse(item.messages, answerElement);
-    if (answer) item.messages.push({ role: "assistant", content: answer });
-    saveChats(); status.textContent = "Online";
+    await updateChat(item, { nome: item.nome, mensagens: item.mensagens });
+  } catch (error) {
+    status.textContent = "Erro ao salvar no banco";
+    console.error(error);
+  }
+
+  input.value = "";
+  input.style.height = "auto";
+  state.sending = true;
+  send.disabled = true;
+  status.textContent = "Gerando...";
+  const answerElement = addMessage("assistant", "");
+
+  try {
+    const answer = await streamResponse(item.mensagens, answerElement, item.id);
+    if (answer) item.mensagens.push({ role: "assistant", content: answer });
+    status.textContent = "Online · JSON DB";
   } catch (error) {
     answerElement.textContent = "Não foi possível conectar à API. Verifique o Render e o Ollama.";
-    status.textContent = "API offline"; console.error(error);
-  } finally { state.sending = false; send.disabled = false; input.focus(); }
+    status.textContent = "API offline";
+    console.error(error);
+  } finally {
+    state.sending = false;
+    send.disabled = false;
+    input.focus();
+  }
 });
 
 newChat.addEventListener("click", createChat);
@@ -200,13 +263,28 @@ document.getElementById("expand").addEventListener("click", async () => {
 });
 document.getElementById("conversation-title").addEventListener("click", () => {
   const item = activeChat();
-  showModal("Conversa atual", `<p><strong>${escapeHtml(item?.title || "Nova conversa")}</strong></p><p>${item?.messages.length || 0} mensagens nesta conversa.</p>`);
+  showModal("Conversa atual", `<p><strong>${escapeHtml(item?.nome || "Nova conversa")}</strong></p><p>${item?.mensagens?.length || 0} mensagens.</p><p>ID: ${escapeHtml(String(item?.id || "---"))}</p><p>Modelo: ${escapeHtml(item?.modelo || "qwen2.5:0.5b")}</p>`);
 });
-document.getElementById("sources").addEventListener("click", () => showModal("Fontes", "<p>As fontes usadas pelo Korczak AI aparecerão aqui quando a pesquisa de fontes for ativada.</p>"));
-document.getElementById("memory").addEventListener("click", () => showModal("Memória", "<p>A memória persistente por usuário será conectada ao MongoDB na próxima etapa.</p>"));
-document.getElementById("settings").addEventListener("click", () => showModal("Configurações", "<label class='setting'><input type='checkbox' id='compact-mode'> Modo compacto</label><p class='modal-note'>As preferências ficam salvas neste navegador.</p>"));
-document.getElementById("account-menu").addEventListener("click", () => showModal("Conta", "<p>Você está usando a Korczak AI sem login.</p><p>O sistema de autenticação será adicionado posteriormente.</p>"));
-document.getElementById("attach").addEventListener("click", () => showModal("Adicionar", "<p>Envio de arquivos será conectado quando o sistema de fontes estiver disponível.</p>"));
+document.getElementById("sources").addEventListener("click", () => showModal("Fontes", "<p>A estrutura JSON está preparada para fontes por chat.</p>"));
+document.getElementById("memory").addEventListener("click", () => {
+  const item = activeChat();
+  const memory = item?.memoria || [];
+  showModal("Memória do chat", `<p>${memory.length} memória(s) salva(s).</p><pre>${escapeHtml(JSON.stringify(memory, null, 2))}</pre>`);
+});
+document.getElementById("settings").addEventListener("click", () => {
+  const item = activeChat();
+  showModal("Configurações do chat", `<label class="setting"><span>Nome</span><input id="chat-name" value="${escapeHtml(item?.nome || "Nova conversa")}"></label><label class="setting"><span>Instruções</span><textarea id="chat-instructions" rows="5">${escapeHtml(item?.instrucoes || "")}</textarea></label><button class="modal-save" id="save-chat-settings" type="button">Salvar</button>`);
+  document.getElementById("save-chat-settings").addEventListener("click", async () => {
+    if (!item) return;
+    await updateChat(item, {
+      nome: document.getElementById("chat-name").value,
+      instrucoes: document.getElementById("chat-instructions").value
+    });
+    closeModal();
+  });
+});
+document.getElementById("account-menu").addEventListener("click", () => showModal("Conta", "<p>Conta local. Autenticação será adicionada posteriormente.</p>"));
+document.getElementById("attach").addEventListener("click", () => showModal("Adicionar", "<p>A estrutura do banco está preparada para adicionar fontes e arquivos por chat.</p>"));
 
 document.addEventListener("keydown", event => {
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") { event.preventDefault(); createChat(); }
@@ -214,4 +292,3 @@ document.addEventListener("keydown", event => {
 });
 
 loadChats();
-if (state.chats.length) openChat(state.activeId); else { renderChatList(); renderMessages([]); }
