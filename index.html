@@ -7,25 +7,74 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <main class="app">
-    <header class="topbar">
-      <div>
-        <h1>Korczak AI</h1>
-        <span>Qwen2.5 0.5B</span>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar">
+      <div class="brand">Korczak AI</div>
+
+      <button class="new-chat" id="new-chat" type="button">
+        <span>＋</span>
+        <span>Novo chat</span>
+        <kbd>CTRL K</kbd>
+      </button>
+
+      <label class="search-box">
+        <span>⌕</span>
+        <input id="search" type="search" placeholder="Pesquisar chats" autocomplete="off">
+      </label>
+
+      <div class="section-title">CHATS</div>
+      <div class="chat-list" id="chat-list">
+        <button class="chat-group" type="button">⌄ 🌎 Mundo Real</button>
+        <button class="chat-item active" type="button"><span>001</span> Mundo 001</button>
+        <button class="chat-item" type="button"><span>001</span> Nova conversa</button>
+        <button class="chat-item" type="button"><span>002</span> Mundo 002</button>
+        <button class="chat-item" type="button"><span>003</span> Mundo 003</button>
+        <button class="chat-item" type="button"><span>004</span> Nova conversa</button>
+        <button class="chat-group fantasy" type="button">⌄ ✨ Mundo Fantasia</button>
       </div>
-      <span class="status" id="status">Online</span>
-    </header>
 
-    <section class="chat" id="chat" aria-live="polite">
-      <div class="message assistant">Olá! Eu sou a Korczak AI. Como posso ajudar?</div>
-    </section>
+      <div class="sidebar-bottom">
+        <button type="button">▤ &nbsp; Fontes</button>
+        <button type="button">▥ &nbsp; Memória</button>
+        <button type="button">⚙ &nbsp; Configurações</button>
+        <div class="account">
+          <span class="avatar">R</span>
+          <span>Korczak AI</span>
+          <span class="dots">•••</span>
+        </div>
+      </div>
+    </aside>
 
-    <form class="composer" id="composer">
-      <textarea id="message" rows="1" placeholder="Digite sua mensagem..." autocomplete="off" required></textarea>
-      <button type="submit" id="send">Enviar</button>
-    </form>
-    <p class="hint">Chat sem login • A memória de usuário será adicionada depois.</p>
-  </main>
+    <main class="main-panel">
+      <header class="topbar">
+        <button class="conversation-title" type="button" id="conversation-title">
+          Nova conversa <span>⌄</span>
+        </button>
+        <button class="expand-button" type="button" aria-label="Expandir">↗</button>
+      </header>
+
+      <section class="chat" id="chat" aria-live="polite">
+        <div class="welcome-state" id="welcome-state">
+          <div class="welcome-mark">K</div>
+          <h1>Como posso ajudar?</h1>
+          <p>Converse com a Korczak AI usando Qwen2.5 0.5B.</p>
+        </div>
+      </section>
+
+      <div class="composer-wrap">
+        <form class="composer" id="composer">
+          <textarea id="message" rows="1" placeholder="Mensagem para o Korczak AI" autocomplete="off" required></textarea>
+          <div class="composer-footer">
+            <button class="attach-button" type="button" aria-label="Anexar">＋</button>
+            <span class="composer-hint">Enter para enviar</span>
+            <button class="send-button" type="submit" id="send" aria-label="Enviar">↑</button>
+          </div>
+        </form>
+        <p class="disclaimer"><span id="status">Online</span> · O Korczak AI pode cometer erros. Verifique informações importantes.</p>
+      </div>
+    </main>
+  </div>
+
   <script src="script.js"></script>
 </body>
 </html>
