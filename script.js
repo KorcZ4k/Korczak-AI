@@ -1,5 +1,5 @@
-// Configure the Render API URL here when the backend is deployed.
-const API_URL = "https://SEU-SERVICO.onrender.com";
+// Render API endpoint.
+const API_URL = "https://korczak-ai.onrender.com";
 
 const chat = document.getElementById("chat");
 const form = document.getElementById("composer");
@@ -58,7 +58,7 @@ form.addEventListener("submit", async (event) => {
     history.push({ role: "assistant", content: answer });
     status.textContent = "Online";
   } catch (error) {
-    thinking.textContent = "Não foi possível conectar à API. Verifique se o servidor Render está ativo.";
+    thinking.textContent = "Não foi possível conectar à API. Verifique se o servidor Render e o Ollama estão ativos.";
     status.textContent = "API offline";
     console.error(error);
   } finally {
