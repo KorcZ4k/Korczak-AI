@@ -35,15 +35,19 @@ def _write(path, data):
 
 
 def _index():
-    data = _read(INDEX_PATH, {"version": 1, "next_id": 1, "chats": []})
-    data.setdefault("version", 1)
+    data = _read(INDEX_PATH, {"version": 2, "next_id": 1, "chats": []})
+    data.setdefault("version", 2)
     data.setdefault("next_id", 1)
     data.setdefault("chats", [])
     return data
 
 
 def _chat_path(chat_id):
-    return CHATS_DIR / f"{int(chat_id):03d}.json"
+    try:
+        normalized = f"{int(str(chat_id)):03d}"
+    except (TypeError, ValueError):
+        return None
+    return CHATS_DIR / f"{normalized}.json"
 
 
 def _normalize(chat):
@@ -52,9 +56,12 @@ def _normalize(chat):
     chat.setdefault("instrucoes", "")
     chat.setdefault("modelo", DEFAULT_MODEL)
     chat.setdefault("memoria", [])
+    chat.setdefault("memoria_automatica", [])
     chat.setdefault("fontes", [])
+    chat.setdefault("fontes_web", [])
     chat.setdefault("mensagens", [])
     chat.setdefault("usuario", None)
+    chat.setdefault("preferencias", {"temperature": 0.35, "web_search": True})
     chat.setdefault("metadata", {})
     chat["metadata"].setdefault("created_at", now())
     chat["metadata"].setdefault("updated_at", now())
@@ -66,7 +73,10 @@ def list_chats(user):
         index = _index()
         result = []
         for item in index["chats"]:
-            chat = _normalize(_read(_chat_path(item["id"]), item))
+            path = _chat_path(item.get("id"))
+            if not path:
+                continue
+            chat = _normalize(_read(path, item))
             if chat.get("usuario") == user:
                 result.append({"id": chat["id"], "nome": chat["nome"], "modelo": chat["modelo"], "metadata": chat["metadata"]})
         return sorted(result, key=lambda x: x["id"], reverse=True)
@@ -74,8 +84,11 @@ def list_chats(user):
 
 def get_chat(chat_id, user):
     with LOCK:
-        chat = _normalize(_read(_chat_path(chat_id), {}))
-        if chat.get("id") != f"{int(chat_id):03d}" or chat.get("usuario") != user:
+        path = _chat_path(chat_id)
+        if not path:
+            return None
+        chat = _normalize(_read(path, {}))
+        if chat.get("id") != path.stem or chat.get("usuario") != user:
             return None
         return chat
 
@@ -83,13 +96,26 @@ def get_chat(chat_id, user):
 def create_chat(user, name="Nova conversa", instructions="", model=DEFAULT_MODEL):
     with LOCK:
         index = _index()
-        used = {int(item.get("id", 0)) for item in index["chats"]}
+        used = {int(item.get("id", 0)) for item in index["chats"] if str(item.get("id", "")).isdigit()}
         next_id = max(1, int(index.get("next_id", 1)))
         while next_id in used:
             next_id += 1
         chat_id = f"{next_id:03d}"
         timestamp = now()
-        chat = {"id": chat_id, "nome": name or "Nova conversa", "instrucoes": instructions or "", "modelo": model or DEFAULT_MODEL, "memoria": [], "fontes": [], "mensagens": [], "usuario": user, "metadata": {"created_at": timestamp, "updated_at": timestamp}}
+        chat = {
+            "id": chat_id,
+            "nome": name or "Nova conversa",
+            "instrucoes": instructions or "",
+            "modelo": model or DEFAULT_MODEL,
+            "memoria": [],
+            "memoria_automatica": [],
+            "fontes": [],
+            "fontes_web": [],
+            "mensagens": [],
+            "usuario": user,
+            "preferencias": {"temperature": 0.35, "web_search": True},
+            "metadata": {"created_at": timestamp, "updated_at": timestamp},
+        }
         _write(_chat_path(chat_id), chat)
         index["next_id"] = next_id + 1
         index["chats"].append({"id": chat_id, "nome": chat["nome"], "usuario": user})
@@ -102,14 +128,15 @@ def update_chat(chat_id, user, **changes):
         chat = get_chat(chat_id, user)
         if not chat:
             return None
-        for field in ("nome", "instrucoes", "modelo", "memoria", "fontes", "mensagens"):
+        fields = ("nome", "instrucoes", "modelo", "memoria", "memoria_automatica", "fontes", "fontes_web", "mensagens", "preferencias")
+        for field in fields:
             if field in changes and changes[field] is not None:
                 chat[field] = changes[field]
         chat["metadata"]["updated_at"] = now()
         _write(_chat_path(chat_id), chat)
         index = _index()
         for item in index["chats"]:
-            if item.get("id") == chat["id"] and item.get("usuario") == user:
+            if str(item.get("id")) == str(chat["id"]) and item.get("usuario") == user:
                 item["nome"] = chat["nome"]
         _write(INDEX_PATH, index)
         return chat
@@ -121,9 +148,9 @@ def delete_chat(chat_id, user):
         if not chat:
             return False
         path = _chat_path(chat_id)
-        if path.exists():
+        if path and path.exists():
             path.unlink()
         index = _index()
-        index["chats"] = [item for item in index["chats"] if item.get("id") != chat["id"]]
+        index["chats"] = [item for item in index["chats"] if not (str(item.get("id")) == str(chat["id"]) and item.get("usuario") == user)]
         _write(INDEX_PATH, index)
         return True
