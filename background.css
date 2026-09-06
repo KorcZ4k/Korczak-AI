@@ -1,17 +1,10 @@
-/* Korczak AI — background baseado na arte fornecida */
+/* Korczak AI — plano de fundo baseado na arte fornecida */
 html, body {
-  background: #06498e url("data:image/webp;base64,UklGRiS2ZAAKAAAASUVORK5CYII=") center center / cover fixed no-repeat !important;
-}
-
-.login-screen,
-.app,
-.main {
-  background-color: transparent !important;
-  background-image: none !important;
+  background: #06498e url("background.svg") center center / cover fixed no-repeat !important;
 }
 
 .login-screen {
-  background: #06498e url("data:image/webp;base64,UklGRiS2ZAAKAAAASUVORK5CYII=") center center / cover fixed no-repeat !important;
+  background: #06498e url("background.svg") center center / cover fixed no-repeat !important;
 }
 
 .app {
