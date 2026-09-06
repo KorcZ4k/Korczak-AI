@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Korczak AI</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="app">
+    <header class="topbar">
+      <div>
+        <h1>Korczak AI</h1>
+        <span>Qwen2.5 0.5B</span>
+      </div>
+      <span class="status" id="status">Online</span>
+    </header>
+
+    <section class="chat" id="chat" aria-live="polite">
+      <div class="message assistant">Olá! Eu sou a Korczak AI. Como posso ajudar?</div>
+    </section>
+
+    <form class="composer" id="composer">
+      <textarea id="message" rows="1" placeholder="Digite sua mensagem..." autocomplete="off" required></textarea>
+      <button type="submit" id="send">Enviar</button>
+    </form>
+    <p class="hint">Chat sem login • A memória de usuário será adicionada depois.</p>
+  </main>
+  <script src="script.js"></script>
+</body>
+</html>
