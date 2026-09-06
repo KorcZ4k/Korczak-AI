@@ -1,0 +1,2 @@
+# Render compatibility when the service Root Directory is the repository root.
+-r api/requirements.txt
