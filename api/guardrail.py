@@ -9,6 +9,7 @@ from pymongo import MongoClient
 
 logger = logging.getLogger("korczak.audit")
 AUDIT_COLLECTION = os.getenv("MONGODB_AUDIT_COLLECTION", "AuditEvents").strip() or "AuditEvents"
+AUDIT_RETENTION_DAYS = max(7, int(os.getenv("AUDIT_RETENTION_DAYS", "90")))
 MONGODB_URI = os.getenv("MONGODB_URI", "").strip()
 MONGODB_DATABASE = os.getenv("MONGODB_DATABASE", "KorczakControl").strip() or "KorczakControl"
 _audit_client = None
@@ -44,14 +45,14 @@ def _audit_store():
     if _audit_collection is None:
         _audit_client = MongoClient(MONGODB_URI, serverSelectionTimeoutMS=2000, connectTimeoutMS=2000, socketTimeoutMS=3000, appname="KorczakAI-Audit")
         _audit_collection = _audit_client[MONGODB_DATABASE][AUDIT_COLLECTION]
-        _audit_collection.create_index("timestamp")
+        _audit_collection.create_index("timestamp", expireAfterSeconds=AUDIT_RETENTION_DAYS * 86400)
         _audit_collection.create_index("event")
     return _audit_collection
 
 
 def audit(event, *, user=None, chat_id=None, allowed=True, reason=None, text=None, metadata=None):
     record = {
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(timezone.utc),
         "event": str(event)[:100],
         "allowed": bool(allowed),
         "user_hash": _sha(user) if user else None,
@@ -65,7 +66,7 @@ def audit(event, *, user=None, chat_id=None, allowed=True, reason=None, text=Non
         if store is not None:
             store.insert_one(record)
         else:
-            logger.info("%s", json.dumps(record, ensure_ascii=False))
+            logger.info("%s", json.dumps(record, ensure_ascii=False, default=str))
     except Exception:
         logger.exception("Audit persistence failed")
 
