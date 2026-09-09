@@ -1,6 +1,4 @@
-import hashlib
 import html
-import ipaddress
 import json
 import os
 import re
@@ -59,7 +57,7 @@ MODEL_CONTEXT = max(1024, min(int(os.getenv("MODEL_CONTEXT", "8192")), 32768))
 MODEL_TEMPERATURE = max(0.0, min(float(os.getenv("MODEL_TEMPERATURE", "0.35")), 1.5))
 SEARCH_ENABLED = os.getenv("WEB_SEARCH_ENABLED", "true").lower() not in {"0", "false", "no"}
 SEARCH_MAX_RESULTS = max(1, min(int(os.getenv("WEB_SEARCH_MAX_RESULTS", "5")), 8))
-MAX_BODY_BYTES = max(16_384, min(int(os.getenv("MAX_BODY_BYTES", str(2 * 1024 * 1024)), 2 * 1024 * 1024)))
+MAX_BODY_BYTES = max(16_384, min(int(os.getenv("MAX_BODY_BYTES", str(2 * 1024 * 1024))), 2 * 1024 * 1024))
 CHAT_RATE_LIMIT = max(1, int(os.getenv("CHAT_RATE_LIMIT", "20")))
 SEARCH_RATE_LIMIT = max(1, int(os.getenv("SEARCH_RATE_LIMIT", "30")))
 LOGIN_RATE_LIMIT = max(1, int(os.getenv("LOGIN_RATE_LIMIT", "10")))
@@ -166,13 +164,6 @@ def _rate_limit(key, limit):
             if not _rate_buckets[stale_key]:
                 _rate_buckets.pop(stale_key, None)
     return True
-
-
-def _request_identity():
-    user = current_user()
-    if user:
-        return f"user:{user}"
-    return f"ip:{request.remote_addr or 'unknown'}"
 
 
 def clean_history(messages):
@@ -428,7 +419,6 @@ def chat_endpoint(user):
     except requests.RequestException as exc:
         audit("chat_error", user=user, chat_id=chat_id, reason="ollama_request_failed", metadata={"error": str(exc)[:300]})
         return jsonify({"error": "Falha ao conectar ao servidor do modelo"}), 502
-
     collected = []
     try:
         for raw_line in response.iter_lines(decode_unicode=True):
