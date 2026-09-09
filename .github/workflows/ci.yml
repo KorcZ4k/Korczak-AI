@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, hardening/excellence]
+    branches: [main, hardening/excellence, hardening/excellence-v2]
   pull_request:
     branches: [main]
 
@@ -23,7 +23,7 @@ jobs:
           cache: pip
 
       - name: Install dependencies
-        run: python -m pip install -r api/requirements.txt pytest
+        run: python -m pip install -r api/requirements.txt pytest pip-audit
 
       - name: Compile Python
         run: python -m compileall -q api tests
@@ -33,3 +33,6 @@ jobs:
 
       - name: Run tests
         run: pytest -q
+
+      - name: Audit Python dependencies
+        run: pip-audit -r api/requirements.txt
