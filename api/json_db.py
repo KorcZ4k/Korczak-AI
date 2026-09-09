@@ -23,7 +23,7 @@ MAX_CHAT_BYTES = 900_000
 MODEL_PATTERN = re.compile(r"[A-Za-z0-9_.:/-]{1,120}")
 
 _client = None
-_collection = None
+_mongo_collection = None
 _indexes_ready = False
 
 
@@ -32,10 +32,10 @@ def now():
 
 
 def _collection():
-    global _client, _collection, _indexes_ready
+    global _client, _mongo_collection, _indexes_ready
     if not MONGODB_URI:
         raise RuntimeError("MONGODB_URI não configurado")
-    if _collection is None:
+    if _mongo_collection is None:
         _client = MongoClient(
             MONGODB_URI,
             serverSelectionTimeoutMS=5000,
@@ -43,12 +43,12 @@ def _collection():
             socketTimeoutMS=15000,
             appname="KorczakAI",
         )
-        _collection = _client[MONGODB_DATABASE][CHATS_COLLECTION]
+        _mongo_collection = _client[MONGODB_DATABASE][CHATS_COLLECTION]
     if not _indexes_ready:
-        _collection.create_index([("usuario", ASCENDING), ("metadata.updated_at", DESCENDING)])
-        _collection.create_index([("usuario", ASCENDING), ("id", ASCENDING)], unique=True)
+        _mongo_collection.create_index([("usuario", ASCENDING), ("metadata.updated_at", DESCENDING)])
+        _mongo_collection.create_index([("usuario", ASCENDING), ("id", ASCENDING)], unique=True)
         _indexes_ready = True
-    return _collection
+    return _mongo_collection
 
 
 def _normalize(chat):
