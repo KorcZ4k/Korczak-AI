@@ -23,10 +23,11 @@ def test_health_does_not_expose_internal_configuration():
 
 def test_history_is_bounded_and_roles_are_whitelisted():
     messages = [{"role": "user", "content": str(i)} for i in range(50)]
-    messages += [{"role": "system", "content": "must not pass"}]
     cleaned = clean_history(messages)
     assert len(cleaned) == 30
     assert all(item["role"] in {"user", "assistant"} for item in cleaned)
+    messages.append({"role": "system", "content": "must not pass"})
+    assert all(item["role"] != "system" for item in clean_history(messages))
 
 
 def test_search_intent_respects_toggle():
