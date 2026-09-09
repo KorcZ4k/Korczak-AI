@@ -3,8 +3,13 @@ name: Deploy GitHub Pages
 on:
   push:
     branches: [main]
-    paths-ignore:
-      - "ollama-endpoint.json"
+    paths:
+      - "index.html"
+      - "style.css"
+      - "script.js"
+      - "background.css"
+      - "background.svg"
+      - ".github/workflows/deploy-pages.yml"
   workflow_dispatch:
 
 permissions:
@@ -26,13 +31,24 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Build public site
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf dist
+          mkdir -p dist
+          cp index.html style.css script.js background.css background.svg dist/
+          test -f dist/index.html
+          test -f dist/script.js
+          ! grep -R "MONGODB_URI\|SECRET_KEY\|OLLAMA_BASE_URL" dist/
+
       - name: Setup Pages
         uses: actions/configure-pages@v5
 
       - name: Upload site
         uses: actions/upload-pages-artifact@v3
         with:
-          path: .
+          path: dist
 
       - name: Deploy to GitHub Pages
         id: deployment

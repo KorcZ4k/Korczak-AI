@@ -1,16 +1,19 @@
 import hashlib
 import json
+import logging
+import os
 import re
-import threading
 from datetime import datetime, timezone
-from pathlib import Path
 
-AUDIT_PATH = Path(__file__).resolve().parent.parent / "DB" / "JSON" / "AUDIT" / "events.jsonl"
-AUDIT_PATH.parent.mkdir(parents=True, exist_ok=True)
-_AUDIT_LOCK = threading.Lock()
+from pymongo import MongoClient
 
-# Padrões de alta confiança. Assuntos sensíveis continuam permitidos quando tratados
-# de forma educativa, defensiva, preventiva ou de recuperação.
+logger = logging.getLogger("korczak.audit")
+AUDIT_COLLECTION = os.getenv("MONGODB_AUDIT_COLLECTION", "AuditEvents").strip() or "AuditEvents"
+MONGODB_URI = os.getenv("MONGODB_URI", "").strip()
+MONGODB_DATABASE = os.getenv("MONGODB_DATABASE", "KorczakControl").strip() or "KorczakControl"
+_audit_client = None
+_audit_collection = None
+
 BLOCK_PATTERNS = [
     ("credential_theft", re.compile(r"(?:roub|roubar|furt|exfiltrat).{0,60}(?:senha|password|token|cookie|credencial)|(?:keylog(?:ger|ging)|steal\s+cookies|session\s+cookie\s+theft)", re.I | re.S)),
     ("malware_deployment", re.compile(r"(?:crie|fa[cç]a|escreva|execute|deploy).{0,100}(?:ransomware|keylogger|trojan|stealer|botnet).{0,140}(?:payload|c[oó]digo|script|exploit)", re.I | re.S)),
@@ -26,21 +29,37 @@ def _sha(text):
     return hashlib.sha256(text.encode("utf-8", "ignore")).hexdigest()[:16]
 
 
+def _audit_store():
+    global _audit_client, _audit_collection
+    if not MONGODB_URI:
+        return None
+    if _audit_collection is None:
+        _audit_client = MongoClient(MONGODB_URI, serverSelectionTimeoutMS=2000, connectTimeoutMS=2000, socketTimeoutMS=3000, appname="KorczakAI-Audit")
+        _audit_collection = _audit_client[MONGODB_DATABASE][AUDIT_COLLECTION]
+        _audit_collection.create_index("timestamp")
+        _audit_collection.create_index("event")
+    return _audit_collection
+
+
 def audit(event, *, user=None, chat_id=None, allowed=True, reason=None, text=None, metadata=None):
     record = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "event": event,
+        "event": str(event)[:100],
         "allowed": bool(allowed),
-        "user": user,
-        "chat_id": chat_id,
-        "reason": reason,
-        # Nunca gravamos o texto sensível no log; somente um hash curto para correlação.
+        "user_hash": _sha(user) if user else None,
+        "chat_id": str(chat_id)[:100] if chat_id else None,
+        "reason": str(reason)[:500] if reason else None,
         "text_hash": _sha(text) if text else None,
-        "metadata": metadata or {},
+        "metadata": metadata if isinstance(metadata, dict) else {},
     }
-    with _AUDIT_LOCK:
-        with AUDIT_PATH.open("a", encoding="utf-8") as handle:
-            handle.write(json.dumps(record, ensure_ascii=False) + "\n")
+    try:
+        store = _audit_store()
+        if store is not None:
+            store.insert_one(record)
+        else:
+            logger.info("%s", json.dumps(record, ensure_ascii=False))
+    except Exception:
+        logger.exception("Audit persistence failed")
 
 
 def inspect_input(text):
