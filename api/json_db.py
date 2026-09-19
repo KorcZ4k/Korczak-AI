@@ -45,8 +45,9 @@ def _collection():
         )
         _mongo_collection = _client[MONGODB_DATABASE][CHATS_COLLECTION]
     if not _indexes_ready:
+        _mongo_collection.create_index([("id_usuario", ASCENDING), ("metadata.updated_at", DESCENDING)])
+        _mongo_collection.create_index([("id_usuario", ASCENDING), ("id_chat", ASCENDING)], unique=True)
         _mongo_collection.create_index([("usuario", ASCENDING), ("metadata.updated_at", DESCENDING)])
-        _mongo_collection.create_index([("usuario", ASCENDING), ("id", ASCENDING)], unique=True)
         _indexes_ready = True
     return _mongo_collection
 
@@ -163,8 +164,6 @@ def get_chat(chat_id, user, user_id=None):
     if not user_id:
         raise ValueError("ID do usuário é obrigatório")
     query = {"id": chat_id, "$or": [{"id_usuario": str(user_id)}, {"usuario": user}]}
-    if user_id:
-        query["$or"].append({"id_usuario": str(user_id)})
     item = _collection().find_one(query, {"_id": 0})
     if not item:
         return None
