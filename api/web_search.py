@@ -1,6 +1,7 @@
 import os
 import re
 import uuid
+from urllib.parse import urlparse
 from datetime import datetime, timezone
 
 import requests
@@ -65,14 +66,23 @@ def _clean_result(item):
     return {"title": title[:300], "url": url[:1500], "snippet": content[:1600]}
 
 
-def _search_searxng(query):
+def _validated_searxng_base():
     if not SEARXNG_URL:
         raise RuntimeError("SEARXNG_URL não configurado")
+    parsed = urlparse(SEARXNG_URL)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc or parsed.username or parsed.password:
+        raise RuntimeError("SEARXNG_URL inválido")
+    return SEARXNG_URL
+
+
+def _search_searxng(query):
+    base = _validated_searxng_base()
     response = requests.get(
         f"{SEARXNG_URL}/search",
         params={"q": query, "format": "json", "language": "pt-BR", "safesearch": 1},
         headers={"Accept": "application/json", "User-Agent": "KorczakAI/1.0"},
         timeout=(5, 15),
+        allow_redirects=False,
     )
     response.raise_for_status()
     payload = response.json()
@@ -147,10 +157,14 @@ def search_and_store(query, user_id, chat_id=None):
 
 
 def healthcheck():
-    if not SEARXNG_URL:
-        return False
     try:
-        response = requests.get(f"{SEARXNG_URL}/config", timeout=(2, 4), headers={"Accept": "application/json"})
-        return response.ok
-    except requests.RequestException:
+        base = _validated_searxng_base()
+        response = requests.get(
+            f"{base}/config",
+            timeout=(2, 4),
+            headers={"Accept": "application/json", "User-Agent": "KorczakAI/1.0"},
+            allow_redirects=False,
+        )
+        return response.ok and "application/json" in response.headers.get("Content-Type", "")
+    except (requests.RequestException, RuntimeError):
         return False
