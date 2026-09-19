@@ -9,9 +9,10 @@ os.environ.setdefault("MONGODB_URI", "")
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "api"))
 
 import app as app_module  # noqa: E402
-from app import app, clean_history, make_token, current_user  # noqa: E402
+from app import app, clean_history, make_token, current_user, should_search  # noqa: E402
 from guardrail import inspect_input, inspect_output  # noqa: E402
 from json_db import _safe_list, _safe_messages, _safe_preferences  # noqa: E402
+from web_search import normalize_query  # noqa: E402
 
 
 def test_health_does_not_expose_internal_configuration():
@@ -150,3 +151,10 @@ def test_request_body_limit_rejects_large_payload(monkeypatch):
     monkeypatch.setattr(app_module, "MAX_BODY_BYTES", 16_384)
     response = app.test_client().post("/api/chat", data="x" * 20_000, content_type="text/plain")
     assert response.status_code == 413
+
+
+def test_web_search_intent_and_normalization():
+    assert should_search("pesquise notícias sobre SearXNG")
+    assert should_search("qual é o preço atual do dólar?")
+    assert not should_search("oi, tudo bem?")
+    assert normalize_query("  SearXNG   API  ") == "searxng api"
