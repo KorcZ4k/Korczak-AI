@@ -17,6 +17,7 @@ from identity import KORCZAK_IDENTITY
 from json_db import create_chat, delete_chat, get_chat, list_chats, update_chat
 from knowledge import knowledge_prompt
 from rate_limit import allow as rate_allow
+from web_search import SEARCH_RATE_LIMIT, SEARXNG_URL, healthcheck as search_healthcheck, related_context, search_and_store
 
 app = Flask(__name__)
 
@@ -60,6 +61,7 @@ MAX_BODY_BYTES = max(16_384, min(int(os.getenv("MAX_BODY_BYTES", str(2 * 1024 * 
 CHAT_RATE_LIMIT = max(1, int(os.getenv("CHAT_RATE_LIMIT", "20")))
 LOGIN_RATE_LIMIT = max(1, int(os.getenv("LOGIN_RATE_LIMIT", "10")))
 RATE_WINDOW = max(60, int(os.getenv("RATE_WINDOW", "60")))
+SEARCH_ENABLED = os.getenv("SEARCH_ENABLED", "true").strip().lower() not in {"0", "false", "no", "off"}
 
 _serializer = URLSafeTimedSerializer(SECRET_KEY, salt="korczak-ai-auth-v3")
 _mongo_client = None
@@ -88,6 +90,7 @@ def _mongo_users():
         _mongo_client = MongoClient(MONGODB_URI, serverSelectionTimeoutMS=5000, connectTimeoutMS=5000, socketTimeoutMS=10000, appname="KorczakAI")
         _users = _mongo_client[MONGODB_DATABASE][MONGODB_COLLECTION]
         _users.create_index("email_normalized", unique=True, sparse=True)
+        _users.create_index("ID", unique=True, sparse=True)
     return _users
 
 
@@ -104,8 +107,15 @@ def _user_doc(email):
         return None, "MongoDB não configurado"
     try:
         doc = collection.find_one({"$or": [{"email_normalized": email}, {"email": email}]})
-        if doc and not doc.get("email_normalized"):
-            collection.update_one({"_id": doc["_id"]}, {"$set": {"email_normalized": _normalize_email(doc.get("email"))}})
+        if doc:
+            changes = {}
+            if not doc.get("email_normalized"):
+                changes["email_normalized"] = _normalize_email(doc.get("email"))
+            if not doc.get("ID"):
+                changes["ID"] = secrets.token_hex(16)
+            if changes:
+                collection.update_one({"_id": doc["_id"]}, {"$set": changes})
+                doc.update(changes)
         return doc, None
     except Exception as exc:
         app.logger.exception("MongoDB user lookup failed")
@@ -170,38 +180,17 @@ def clean_history(messages):
     return cleaned
 
 
-def should_search(query, enabled=True):
-    if not SEARCH_ENABLED or not enabled or not query:
+def should_search(query):
+    if not SEARCH_ENABLED or not SEARXNG_URL or not query:
         return False
     q = str(query).casefold()
-    triggers = ("pesquise", "pesquisa", "procure", "busque", "fonte", "fontes", "link", "notícia", "noticias", "notícias", "hoje", "agora", "atual", "atualmente", "último", "última", "últimos", "últimas", "preço", "cotação", "recentemente")
+    triggers = (
+        "pesquise", "pesquisa", "procure", "busque", "fonte", "fontes",
+        "link", "notícia", "noticias", "notícias", "hoje", "agora",
+        "atual", "atualmente", "último", "última", "últimos", "últimas",
+        "preço", "cotação", "recentemente", "quem é", "o que aconteceu",
+    )
     return len(q) >= 4 and any(term in q for term in triggers)
-
-
-def web_search(query):
-    query = str(query or "").strip()[:500]
-    if not SEARCH_ENABLED or not query:
-        return []
-    url = f"https://html.duckduckgo.com/html/?q={quote_plus(query)}"
-    try:
-        response = requests.get(url, headers={"User-Agent": "KorczakAI/1.0"}, timeout=(5, 10))
-        response.raise_for_status()
-        source_html = response.text[:2_000_000]
-    except requests.RequestException as exc:
-        audit("web_search_error", reason="search_request_failed", metadata={"error": str(exc)[:300]})
-        return []
-    matches = re.findall(r'<a[^>]+class="result__a"[^>]+href="([^"]+)"[^>]*>(.*?)</a>', source_html, re.I | re.S)
-    snippets = re.findall(r'<a[^>]+class="result__snippet"[^>]*>(.*?)</a>|<div[^>]+class="result__snippet"[^>]*>(.*?)</div>', source_html, re.I | re.S)
-    results = []
-    for index, (href, title_html) in enumerate(matches[:SEARCH_MAX_RESULTS]):
-        parsed = urlparse(href)
-        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
-            continue
-        title = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", html.unescape(title_html))).strip()
-        raw_snippet = next((v for v in snippets[index] if v), "") if index < len(snippets) else ""
-        snippet = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", html.unescape(raw_snippet))).strip()
-        results.append({"title": title[:240], "url": href[:1000], "snippet": snippet[:1000]})
-    return results
 
 
 @app.before_request
@@ -246,7 +235,8 @@ def api_health():
     except requests.RequestException:
         ollama_ok = False
     ready = mongo_ok and ollama_ok
-    return jsonify({"status": "ok" if ready else "degraded", "mongodb": mongo_ok, "ollama": ollama_ok})
+    searxng_ok = search_healthcheck() if SEARCH_ENABLED else False
+    return jsonify({"status": "ok" if ready else "degraded", "mongodb": mongo_ok, "ollama": ollama_ok, "searxng": searxng_ok})
 
 
 @app.post("/api/auth/login")
