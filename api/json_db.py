@@ -143,10 +143,21 @@ def list_chats(user, user_id=None):
         query,
         {"_id": 0, "id": 1, "nome": 1, "modelo": 1, "metadata": 1},
     ).sort("metadata.updated_at", DESCENDING).limit(200)
-    return [_normalize(item) for item in cursor]
+    chats = []
+    collection = _collection()
+    for item in cursor:
+        normalized = _normalize(item)
+        if user_id and normalized.get("id_usuario") != str(user_id):
+            collection.update_one(
+                {"id": normalized["id"], "usuario": user},
+                {"$set": {"id_usuario": str(user_id), "id_chat": normalized["id"]}},
+            )
+            normalized["id_usuario"] = str(user_id)
+        chats.append(normalized)
+    return chats
 
 
-def get_chat(chat_id, user):
+def get_chat(chat_id, user, user_id=None):
     if not isinstance(chat_id, str) or not chat_id or len(chat_id) > 100:
         return None
     query = {"id": chat_id, "$or": [{"usuario": user}]}
