@@ -243,7 +243,7 @@ def update_chat(chat_id, user, user_id=None, **changes):
     _validate_chat_size(candidate)
 
     item = _collection().find_one_and_update(
-        {"id": chat_id, "id_usuario": str(user_id)},
+        {"id": chat_id, "$or": [{"id_usuario": str(user_id)}, {"usuario": user}]},
         {"$set": {**update, "id_chat": chat_id, "id_usuario": str(user_id), "metadata.updated_at": candidate["metadata"]["updated_at"]}},
         projection={"_id": 0},
         return_document=ReturnDocument.AFTER,
@@ -254,5 +254,5 @@ def update_chat(chat_id, user, user_id=None, **changes):
 def delete_chat(chat_id, user, user_id=None):
     if not user_id:
         raise ValueError("ID do usuário é obrigatório")
-    result = _collection().delete_one({"id": chat_id, "id_usuario": str(user_id)})
+    result = _collection().delete_one({"id": chat_id, "$or": [{"id_usuario": str(user_id)}, {"usuario": user}]})
     return result.deleted_count == 1
