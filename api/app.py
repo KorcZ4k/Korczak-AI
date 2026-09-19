@@ -515,7 +515,7 @@ def chat_endpoint(user):
             app.logger.exception("Failed to persist chat messages")
             return jsonify({"error": "Resposta gerada, mas não foi possível salvá-la"}), 503
     lines = []
-    lines.append(json.dumps({"message": {"role": "assistant", "content": answer}, "sources": search_payload.get("results", []), "done": True}, ensure_ascii=False))
+    lines.append(json.dumps({"message": {"role": "assistant", "content": answer}, "sources": search_payload.get("results", []), "previous_sources": search_payload.get("previous", []), "done": True}, ensure_ascii=False))
     return Response("\n".join(lines) + "\n", mimetype="application/x-ndjson")
 
 
