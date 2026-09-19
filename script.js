@@ -25,7 +25,7 @@ const modalContent = $("modal-content");
 const modalClose = $("modal-close");
 const fileInput = $("file-input");
 
-const state = { chats: [], activeId: null, activeChat: null, sending: false, user: null, webSources: [] };
+const state = { chats: [], activeId: null, activeChat: null, sending: false, user: null };
 
 function token() { return localStorage.getItem(TOKEN_KEY); }
 function authHeaders(json = false) {
@@ -115,7 +115,6 @@ async function logout(callApi = true) {
   state.chats = [];
   state.activeId = null;
   state.activeChat = null;
-  state.webSources = [];
   showLogin();
 }
 
@@ -198,7 +197,6 @@ async function openChat(id) {
     const item = await api(`/api/chats/${encodeURIComponent(id)}`);
     state.activeId = item.id;
     state.activeChat = item;
-    state.webSources = item.fontes_web || [];
     renderChatList();
     renderMessages(item.mensagens || []);
     setConversationTitle(item.nome);
@@ -268,10 +266,6 @@ async function streamResponse(messages, target) {
       for (const line of lines) {
         if (!line.trim()) continue;
         const chunk = JSON.parse(line);
-        if (chunk.korczak?.sources) {
-          state.webSources = chunk.korczak.sources;
-          continue;
-        }
         const piece = chunk?.message?.content || "";
         if (piece) {
           answer += piece;
@@ -283,7 +277,6 @@ async function streamResponse(messages, target) {
     buffer += decoder.decode();
     if (buffer.trim()) {
       const chunk = JSON.parse(buffer);
-      if (chunk.korczak?.sources) state.webSources = chunk.korczak.sources;
       answer += chunk?.message?.content || "";
     }
     target.textContent = answer;
@@ -374,8 +367,7 @@ function sourcesModal() {
   const item = activeChat();
   if (!item) return;
   const local = Array.isArray(item.fontes) ? item.fontes : [];
-  const web = state.webSources.length ? state.webSources : (item.fontes_web || []);
-  showModal("Fontes", `<p class="modal-note">Arquivos locais e resultados web usados pelo chat.</p><h3>Arquivos</h3><div>${local.length ? local.map((source, i) => `<div class="memory-row"><span>▤ ${escapeHtml(source.name)}</span><button data-source="${i}" type="button">×</button></div>`).join("") : "<p>Nenhum arquivo.</p>"}</div><h3>Web</h3><div class="source-list">${web.length ? web.slice(-10).reverse().map(source => `<a href="${escapeHtml(source.url)}" target="_blank" rel="noopener noreferrer"><strong>${escapeHtml(source.title)}</strong><small>${escapeHtml(source.snippet || source.url)}</small></a>`).join("") : "<p>Nenhuma pesquisa web recente.</p>"}</div><button class="primary wide" id="choose-source">＋ Adicionar arquivo</button>`);
+  showModal("Fontes", `<p class="modal-note">Arquivos locais usados pelo chat.</p><h3>Arquivos</h3><div>${local.length ? local.map((source, i) => `<div class="memory-row"><span>▤ ${escapeHtml(source.name)}</span><button data-source="${i}" type="button">×</button></div>`).join("") : "<p>Nenhum arquivo.</p>"}</div><button class="primary wide" id="choose-source">＋ Adicionar arquivo</button>`);
   document.querySelectorAll("[data-source]").forEach(button => {
     button.onclick = async () => {
       const next = [...local];
@@ -428,7 +420,7 @@ form.addEventListener("submit", async event => {
     input.style.height = "auto";
     const answerElement = addMessage("assistant", "");
     const answer = await streamResponse(messages, answerElement);
-    if (answer) await patchActive({ mensagens: [...messages, { role: "assistant", content: answer }], fontes_web: state.webSources });
+    if (answer) await patchActive({ mensagens: [...messages, { role: "assistant", content: answer }] });
     status.textContent = "Online";
   } catch (error) {
     const last = chat.lastElementChild;
