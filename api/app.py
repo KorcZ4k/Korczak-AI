@@ -183,7 +183,7 @@ def clean_history(messages):
 
 
 def should_search(query):
-    if not SEARCH_ENABLED or not SEARXNG_URL or not query:
+    if not SEARCH_ENABLED or not query:
         return False
     q = str(query).casefold()
     triggers = (
