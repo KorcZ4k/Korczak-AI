@@ -9,7 +9,7 @@ os.environ.setdefault("MONGODB_URI", "")
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "api"))
 
 import app as app_module  # noqa: E402
-from app import app, clean_history, make_token, should_search, current_user  # noqa: E402
+from app import app, clean_history, make_token, current_user  # noqa: E402
 from guardrail import inspect_input, inspect_output  # noqa: E402
 from json_db import _safe_list, _safe_messages, _safe_preferences  # noqa: E402
 
@@ -50,11 +50,6 @@ def test_history_is_bounded_and_roles_are_whitelisted():
 def test_history_truncates_message_content():
     cleaned = clean_history([{"role": "user", "content": "x" * 20_000}])
     assert len(cleaned[0]["content"]) == 12_000
-
-
-def test_search_intent_respects_toggle():
-    assert should_search("qual é o preço atual?", True)
-    assert not should_search("qual é o preço atual?", False)
 
 
 def test_signed_token_round_trip():
@@ -123,7 +118,7 @@ def test_persistence_messages_are_validated():
 
 
 def test_preferences_are_strictly_validated():
-    assert _safe_preferences({"temperature": 0.5, "web_search": False}) == {"temperature": 0.5, "web_search": False}
+    assert _safe_preferences({"temperature": 0.5}) == {"temperature": 0.5}
     for value in ({"temperature": 2}, {"web_search": "yes"}, {"unknown": True}):
         try:
             _safe_preferences(value)
