@@ -17,11 +17,14 @@ Defina no ambiente do serviço backend:
 - `MONGODB_DATABASE=KorczakControl`
 - `MONGODB_COLLECTION=Users`
 - `MONGODB_CHATS_COLLECTION=Chats`
+- `MONGODB_BUSCAS_COLLECTION=Buscas`
 - `MONGODB_AUDIT_COLLECTION=AuditEvents`
 - `MONGODB_RATE_COLLECTION=RateLimits`
 - `AUDIT_RETENTION_DAYS=90`
 - `SECRET_KEY` — segredo aleatório longo e persistente
 - `OLLAMA_BASE_URL` — URL privada do Ollama
+- `SEARXNG_URL` — URL da instância SearXNG usada pela busca web
+- `SEARCH_ENABLED` e `SEARCH_MAX_RESULTS` — controle da busca web
 - `FRONTEND_ORIGIN` — origem exata do frontend; não use `*` em produção
 - `MODEL`, `MODEL_CONTEXT` e `MODEL_TEMPERATURE` conforme o servidor de inferência
 - `AUTH_TOKEN_MAX_AGE`, `MAX_BODY_BYTES`, `LOGIN_RATE_LIMIT`, `CHAT_RATE_LIMIT` e `RATE_WINDOW` conforme a capacidade do serviço
@@ -30,7 +33,7 @@ A API falha no boot se os segredos ou endpoints obrigatórios não estiverem con
 
 ## Persistência
 
-Chats, auditoria e rate limiting compartilhado usam MongoDB. O antigo armazenamento JSON foi removido do caminho de produção para evitar perda de dados em reinícios, múltiplas instâncias e deploys efêmeros.
+Chats, auditoria, buscas web e rate limiting compartilhado usam MongoDB. O antigo armazenamento JSON foi removido do caminho de produção para evitar perda de dados em reinícios, múltiplas instâncias e deploys efêmeros.
 
 Chats têm limites explícitos de tamanho, quantidade de mensagens, memórias, fontes e preferências. Isso evita crescimento ilimitado de documentos e contexto.
 
@@ -74,3 +77,9 @@ O endpoint `/health/live` serve para liveness. O endpoint `/api/health` verifica
 ## CI
 
 Cada push e pull request para `main` executa compilação Python, validação JavaScript, testes de regressão/segurança e auditoria de dependências Python. Os workflows usam actions fixadas por SHA.
+
+## Busca web
+
+A busca usa SearXNG pela API HTTP `/search?format=json`. Cada pesquisa é persistida na collection `Buscas` com `id_usuario`, `id_chat`, consulta, termos, resultados, provedor e data. Pesquisas anteriores relacionadas são recuperadas por usuário e entram no contexto do chat como dados externos, sem serem tratadas como instruções.
+
+Contas em `Users` recebem o campo `ID` automaticamente quando são acessadas e chats passam a persistir `id_usuario` e `id_chat`.
