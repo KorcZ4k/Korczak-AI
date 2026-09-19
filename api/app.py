@@ -91,6 +91,8 @@ def _mongo_users():
         _users = _mongo_client[MONGODB_DATABASE][MONGODB_COLLECTION]
         _users.create_index("email_normalized", unique=True, sparse=True)
         _users.create_index("ID", unique=True, sparse=True)
+        for legacy_user in _users.find({"ID": {"$exists": False}}, {"_id": 1}):
+            _users.update_one({"_id": legacy_user["_id"]}, {"$set": {"ID": secrets.token_hex(16)}})
     return _users
 
 
