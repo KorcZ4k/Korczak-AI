@@ -63,6 +63,8 @@ def _normalize(chat):
     chat.setdefault("fontes", [])
     chat.setdefault("mensagens", [])
     chat.setdefault("usuario", None)
+    chat.setdefault("id_usuario", chat.get("usuario"))
+    chat.setdefault("id_chat", chat.get("id"))
     chat.setdefault("preferencias", {"temperature": 0.35})
     chat.setdefault("metadata", {})
     chat["metadata"].setdefault("created_at", now())
@@ -115,7 +117,7 @@ def _safe_preferences(value):
     unknown = set(value) - allowed
     if unknown:
         raise ValueError("Preferência não suportada")
-    result = {"temperature": 0.35, "web_search": True}
+    result = {"temperature": 0.35}
     if "temperature" in value:
         try:
             temperature = float(value["temperature"])
@@ -133,9 +135,12 @@ def _validate_chat_size(chat):
         raise ValueError("Chat excede o tamanho máximo permitido")
 
 
-def list_chats(user):
+def list_chats(user, user_id=None):
+    query = {"usuario": user}
+    if user_id:
+        query = {"$or": [{"usuario": user}, {"id_usuario": str(user_id)}]}
     cursor = _collection().find(
-        {"usuario": user},
+        query,
         {"_id": 0, "id": 1, "nome": 1, "modelo": 1, "metadata": 1},
     ).sort("metadata.updated_at", DESCENDING).limit(200)
     return [_normalize(item) for item in cursor]
@@ -144,19 +149,32 @@ def list_chats(user):
 def get_chat(chat_id, user):
     if not isinstance(chat_id, str) or not chat_id or len(chat_id) > 100:
         return None
-    item = _collection().find_one({"id": chat_id, "usuario": user}, {"_id": 0})
-    return _normalize(item) if item else None
+    query = {"id": chat_id, "$or": [{"usuario": user}]}
+    if user_id:
+        query["$or"].append({"id_usuario": str(user_id)})
+    item = _collection().find_one(query, {"_id": 0})
+    if not item:
+        return None
+    normalized = _normalize(item)
+    if user_id and normalized.get("id_usuario") != str(user_id):
+        _collection().update_one(
+            {"id": chat_id, "usuario": user},
+            {"$set": {"id_usuario": str(user_id), "id_chat": chat_id}},
+        )
+        normalized["id_usuario"] = str(user_id)
+    return normalized
 
 
-def create_chat(user, name="Nova conversa", instructions="", model=DEFAULT_MODEL):
+def create_chat(user, name="Nova conversa", instructions="", model=DEFAULT_MODEL, user_id=None):
     name = _safe_string(name, MAX_NAME, "Nova conversa") or "Nova conversa"
     instructions = _safe_string(instructions, MAX_INSTRUCTIONS)
     model = _safe_string(model, MAX_MODEL, DEFAULT_MODEL) or DEFAULT_MODEL
     if not MODEL_PATTERN.fullmatch(model):
         raise ValueError("Modelo inválido")
     timestamp = now()
+    chat_id = str(uuid.uuid4())
     chat = {
-        "id": str(uuid.uuid4()),
+        "id": chat_id,
         "nome": name,
         "instrucoes": instructions,
         "modelo": model,
@@ -165,6 +183,8 @@ def create_chat(user, name="Nova conversa", instructions="", model=DEFAULT_MODEL
         "fontes": [],
         "mensagens": [],
         "usuario": user,
+        "id_usuario": str(user_id) if user_id else user,
+        "id_chat": chat_id,
         "preferencias": {"temperature": 0.35},
         "metadata": {"created_at": timestamp, "updated_at": timestamp},
     }
@@ -211,7 +231,7 @@ def update_chat(chat_id, user, **changes):
 
     item = _collection().find_one_and_update(
         {"id": chat_id, "usuario": user},
-        {"$set": {**update, "metadata.updated_at": candidate["metadata"]["updated_at"]}},
+        {"$set": {**update, "id_chat": chat_id, "id_usuario": candidate.get("id_usuario") or user, "metadata.updated_at": candidate["metadata"]["updated_at"]}},
         projection={"_id": 0},
         return_document=ReturnDocument.AFTER,
     )
