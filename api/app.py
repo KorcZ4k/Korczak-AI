@@ -507,7 +507,7 @@ def chat_endpoint(user):
         return jsonify({"error": "A resposta foi bloqueada pelo controle de segurança"}), 502
     if chat_id and answer:
         try:
-            update_chat(chat_id, user, mensagens=clean_messages + [{"role": "assistant", "content": answer}])
+            update_chat(chat_id, user, user_id=user_id, mensagens=clean_messages + [{"role": "assistant", "content": answer}])
         except ValueError as exc:
             app.logger.warning("Failed to validate persisted chat: %s", exc)
             return jsonify({"error": "Resposta gerada, mas os dados do chat excedem os limites permitidos"}), 503
