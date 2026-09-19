@@ -138,7 +138,7 @@ def _validate_chat_size(chat):
 def list_chats(user, user_id=None):
     if not user_id:
         raise ValueError("ID do usuário é obrigatório")
-    query = {"id_usuario": str(user_id)}
+    query = {"$or": [{"id_usuario": str(user_id)}, {"usuario": user}]}
     cursor = _collection().find(
         query,
         {"_id": 0, "id": 1, "nome": 1, "modelo": 1, "metadata": 1},
@@ -147,7 +147,7 @@ def list_chats(user, user_id=None):
     collection = _collection()
     for item in cursor:
         normalized = _normalize(item)
-        if user_id and normalized.get("id_usuario") != str(user_id):
+        if normalized.get("id_usuario") != str(user_id):
             collection.update_one(
                 {"id": normalized["id"], "usuario": user},
                 {"$set": {"id_usuario": str(user_id), "id_chat": normalized["id"]}},
@@ -162,7 +162,7 @@ def get_chat(chat_id, user, user_id=None):
         return None
     if not user_id:
         raise ValueError("ID do usuário é obrigatório")
-    query = {"id": chat_id, "id_usuario": str(user_id)}
+    query = {"id": chat_id, "$or": [{"id_usuario": str(user_id)}, {"usuario": user}]}
     if user_id:
         query["$or"].append({"id_usuario": str(user_id)})
     item = _collection().find_one(query, {"_id": 0})
