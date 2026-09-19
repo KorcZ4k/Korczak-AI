@@ -260,8 +260,9 @@ def login():
         audit("login_denied", user=email, allowed=False, reason="invalid_credentials")
         return jsonify({"error": "Credenciais inválidas"}), 401
     display_name = user.get("name") or user.get("nome") or user.get("username") or email.split("@")[0]
+    user_id = str(user.get("ID"))
     audit("login_success", user=email)
-    return jsonify({"authenticated": True, "token": make_token(email), "user": {"email": user.get("email", email), "name": str(display_name)[:200]}})
+    return jsonify({"authenticated": True, "token": make_token(email), "user": {"ID": user_id, "email": user.get("email", email), "name": str(display_name)[:200]}})
 
 
 @app.get("/api/auth/me")
@@ -270,7 +271,7 @@ def me(user):
     doc, error = _user_doc(user)
     if error or not doc or not password_hash_from_user(doc):
         return jsonify({"error": "Sessão inválida"}), 401
-    return jsonify({"authenticated": True, "user": {"email": doc.get("email", user), "name": doc.get("name") or doc.get("nome") or doc.get("username") or user.split("@")[0]}})
+    return jsonify({"authenticated": True, "user": {"ID": str(doc.get("ID")), "email": doc.get("email", user), "name": doc.get("name") or doc.get("nome") or doc.get("username") or user.split("@")[0]}})
 
 
 @app.post("/api/auth/logout")
@@ -283,8 +284,11 @@ def logout(user):
 @app.get("/api/chats")
 @auth_required
 def chats(user):
+    doc, error = _user_doc(user)
+    if error or not doc:
+        return jsonify({"error": "Usuário não encontrado"}), 401
     try:
-        return jsonify({"chats": list_chats(user)})
+        return jsonify({"chats": list_chats(user, str(doc["ID"]))})
     except Exception:
         app.logger.exception("Chat list failed")
         return jsonify({"error": "Falha ao carregar chats"}), 503
@@ -294,8 +298,11 @@ def chats(user):
 @auth_required
 def new_chat(user):
     data = request.get_json(silent=True) or {}
+    doc, error = _user_doc(user)
+    if error or not doc:
+        return jsonify({"error": "Usuário não encontrado"}), 401
     try:
-        chat = create_chat(user, data.get("nome"), data.get("instrucoes", ""), data.get("modelo", DEFAULT_MODEL))
+        chat = create_chat(user, data.get("nome"), data.get("instrucoes", ""), data.get("modelo", DEFAULT_MODEL), user_id=str(doc["ID"]))
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
     except Exception:
@@ -308,8 +315,11 @@ def new_chat(user):
 @app.get("/api/chats/<chat_id>")
 @auth_required
 def read_chat(user, chat_id):
+    doc, error = _user_doc(user)
+    if error or not doc:
+        return jsonify({"error": "Usuário não encontrado"}), 401
     try:
-        chat = get_chat(chat_id, user)
+        chat = get_chat(chat_id, user, str(doc["ID"]))
     except Exception:
         app.logger.exception("Chat read failed")
         return jsonify({"error": "Falha ao carregar chat"}), 503
@@ -322,7 +332,7 @@ def read_chat(user, chat_id):
 @auth_required
 def patch_chat(user, chat_id):
     data = request.get_json(silent=True) or {}
-    allowed = {key: data[key] for key in ("nome", "instrucoes", "modelo", "memoria", "memoria_automatica", "fontes", "fontes_web", "mensagens", "preferencias") if key in data}
+    allowed = {key: data[key] for key in ("nome", "instrucoes", "modelo", "memoria", "memoria_automatica", "fontes", "mensagens", "preferencias") if key in data}
     try:
         chat = update_chat(chat_id, user, **allowed)
     except ValueError as exc:
@@ -353,13 +363,24 @@ def remove_chat(user, chat_id):
 @app.post("/api/search")
 @auth_required
 def search_endpoint(user):
+    if not SEARCH_ENABLED:
+        return jsonify({"error": "Busca web desativada"}), 503
     if not _rate_limit(f"search:{user}", SEARCH_RATE_LIMIT):
         return jsonify({"error": "Limite de pesquisas atingido"}), 429
     data = request.get_json(silent=True) or {}
     query = str(data.get("query", "")).strip()[:500]
-    results = web_search(query) if query else []
-    audit("web_search", user=user, metadata={"results": len(results)}, text=query)
-    return jsonify({"results": results})
+    if not query:
+        return jsonify({"error": "query é obrigatória"}), 400
+    doc, error = _user_doc(user)
+    if error or not doc:
+        return jsonify({"error": "Usuário não encontrado"}), 401
+    try:
+        result = search_and_store(query, str(doc["ID"]), str(data.get("chat_id", "")).strip() or None)
+    except Exception as exc:
+        audit("web_search_error", user=user, reason="searxng_failed", metadata={"error": str(exc)[:300]})
+        return jsonify({"error": "Serviço de busca indisponível"}), 503
+    audit("web_search", user=user, metadata={"results": len(result["results"]), "stored": result["stored"]}, text=query)
+    return jsonify(result)
 
 
 @app.post("/api/chat")
