@@ -132,6 +132,7 @@ def test_chat_creation_returns_client_error_for_invalid_model(monkeypatch):
     monkeypatch.setattr(app_module, "create_chat", lambda *args, **kwargs: (_ for _ in ()).throw(ValueError("Modelo inválido")))
     token = make_token("test@example.com")
     monkeypatch.setattr(app_module, "_rate_limit", lambda *args: True)
+    monkeypatch.setattr(app_module, "_user_doc", lambda email: ({"ID": "test-user", "email": email, "password": "$2b$12$invalid"}, None))
     client = app.test_client()
     response = client.post(
         "/api/chats",
