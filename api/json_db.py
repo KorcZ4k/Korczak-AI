@@ -61,10 +61,9 @@ def _normalize(chat):
     chat.setdefault("memoria", [])
     chat.setdefault("memoria_automatica", [])
     chat.setdefault("fontes", [])
-    chat.setdefault("fontes_web", [])
     chat.setdefault("mensagens", [])
     chat.setdefault("usuario", None)
-    chat.setdefault("preferencias", {"temperature": 0.35, "web_search": True})
+    chat.setdefault("preferencias", {"temperature": 0.35})
     chat.setdefault("metadata", {})
     chat["metadata"].setdefault("created_at", now())
     chat["metadata"].setdefault("updated_at", chat["metadata"]["created_at"])
@@ -112,7 +111,7 @@ def _safe_messages(value):
 def _safe_preferences(value):
     if not isinstance(value, dict):
         raise ValueError("Preferências inválidas")
-    allowed = {"temperature", "web_search"}
+    allowed = {"temperature"}
     unknown = set(value) - allowed
     if unknown:
         raise ValueError("Preferência não suportada")
@@ -125,10 +124,6 @@ def _safe_preferences(value):
         if not 0 <= temperature <= 1.5:
             raise ValueError("Temperature fora do intervalo permitido")
         result["temperature"] = temperature
-    if "web_search" in value:
-        if not isinstance(value["web_search"], bool):
-            raise ValueError("web_search deve ser booleano")
-        result["web_search"] = value["web_search"]
     return result
 
 
@@ -168,10 +163,9 @@ def create_chat(user, name="Nova conversa", instructions="", model=DEFAULT_MODEL
         "memoria": [],
         "memoria_automatica": [],
         "fontes": [],
-        "fontes_web": [],
         "mensagens": [],
         "usuario": user,
-        "preferencias": {"temperature": 0.35, "web_search": True},
+        "preferencias": {"temperature": 0.35},
         "metadata": {"created_at": timestamp, "updated_at": timestamp},
     }
     _validate_chat_size(chat)
@@ -180,7 +174,7 @@ def create_chat(user, name="Nova conversa", instructions="", model=DEFAULT_MODEL
 
 
 def update_chat(chat_id, user, **changes):
-    fields = ("nome", "instrucoes", "modelo", "memoria", "memoria_automatica", "fontes", "fontes_web", "mensagens", "preferencias")
+    fields = ("nome", "instrucoes", "modelo", "memoria", "memoria_automatica", "fontes", "mensagens", "preferencias")
     update = {}
     for field in fields:
         if field not in changes or changes[field] is None:
@@ -196,7 +190,7 @@ def update_chat(chat_id, user, **changes):
                 raise ValueError("Modelo inválido")
         elif field in {"memoria", "memoria_automatica"}:
             value = _safe_list(value, MAX_LIST_ITEMS, MAX_MEMORY_ITEM)
-        elif field in {"fontes", "fontes_web"}:
+        elif field == "fontes":
             value = _safe_list(value, MAX_LIST_ITEMS, MAX_SOURCE_ITEM)
         elif field == "mensagens":
             value = _safe_messages(value)
