@@ -136,9 +136,9 @@ def _validate_chat_size(chat):
 
 
 def list_chats(user, user_id=None):
-    query = {"usuario": user}
-    if user_id:
-        query = {"$or": [{"usuario": user}, {"id_usuario": str(user_id)}]}
+    if not user_id:
+        raise ValueError("ID do usuário é obrigatório")
+    query = {"id_usuario": str(user_id)}
     cursor = _collection().find(
         query,
         {"_id": 0, "id": 1, "nome": 1, "modelo": 1, "metadata": 1},
@@ -160,7 +160,9 @@ def list_chats(user, user_id=None):
 def get_chat(chat_id, user, user_id=None):
     if not isinstance(chat_id, str) or not chat_id or len(chat_id) > 100:
         return None
-    query = {"id": chat_id, "$or": [{"usuario": user}]}
+    if not user_id:
+        raise ValueError("ID do usuário é obrigatório")
+    query = {"id": chat_id, "id_usuario": str(user_id)}
     if user_id:
         query["$or"].append({"id_usuario": str(user_id)})
     item = _collection().find_one(query, {"_id": 0})
@@ -204,7 +206,7 @@ def create_chat(user, name="Nova conversa", instructions="", model=DEFAULT_MODEL
     return _normalize(chat)
 
 
-def update_chat(chat_id, user, **changes):
+def update_chat(chat_id, user, user_id=None, **changes):
     fields = ("nome", "instrucoes", "modelo", "memoria", "memoria_automatica", "fontes", "mensagens", "preferencias")
     update = {}
     for field in fields:
@@ -231,7 +233,7 @@ def update_chat(chat_id, user, **changes):
     if not update:
         raise ValueError("Nenhum campo válido para atualização")
 
-    current = get_chat(chat_id, user)
+    current = get_chat(chat_id, user, user_id)
     if not current:
         return None
     candidate = dict(current)
@@ -241,14 +243,16 @@ def update_chat(chat_id, user, **changes):
     _validate_chat_size(candidate)
 
     item = _collection().find_one_and_update(
-        {"id": chat_id, "usuario": user},
-        {"$set": {**update, "id_chat": chat_id, "id_usuario": candidate.get("id_usuario") or user, "metadata.updated_at": candidate["metadata"]["updated_at"]}},
+        {"id": chat_id, "id_usuario": str(user_id)},
+        {"$set": {**update, "id_chat": chat_id, "id_usuario": str(user_id), "metadata.updated_at": candidate["metadata"]["updated_at"]}},
         projection={"_id": 0},
         return_document=ReturnDocument.AFTER,
     )
     return _normalize(item) if item else None
 
 
-def delete_chat(chat_id, user):
-    result = _collection().delete_one({"id": chat_id, "usuario": user})
+def delete_chat(chat_id, user, user_id=None):
+    if not user_id:
+        raise ValueError("ID do usuário é obrigatório")
+    result = _collection().delete_one({"id": chat_id, "id_usuario": str(user_id)})
     return result.deleted_count == 1
