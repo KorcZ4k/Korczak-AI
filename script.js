@@ -25,7 +25,7 @@ const modalContent = $("modal-content");
 const modalClose = $("modal-close");
 const fileInput = $("file-input");
 
-const state = { chats: [], activeId: null, activeChat: null, sending: false, user: null, webSources: [] };
+const state = { chats: [], activeId: null, activeChat: null, sending: false, user: null, webSources: [], webPrevious: [] };
 
 function token() { return localStorage.getItem(TOKEN_KEY); }
 function authHeaders(json = false) {
@@ -184,7 +184,7 @@ async function createChat(focus = true) {
     state.chats = [item, ...state.chats.filter(c => String(c.id) !== String(item.id))];
     state.activeId = item.id;
     state.activeChat = item;
-    state.webSources = [];
+    state.webSources = []; state.webPrevious = [];
     renderChatList();
     renderMessages([]);
     setConversationTitle(item.nome);
@@ -268,6 +268,7 @@ async function streamResponse(messages, target) {
         if (!line.trim()) continue;
         const chunk = JSON.parse(line);
         if (Array.isArray(chunk?.sources)) state.webSources = chunk.sources;
+        if (Array.isArray(chunk?.previous_sources)) state.webPrevious = chunk.previous_sources;
         const piece = chunk?.message?.content || "";
         if (piece) {
           answer += piece;
@@ -370,7 +371,10 @@ function sourcesModal() {
   if (!item) return;
   const local = Array.isArray(item.fontes) ? item.fontes : [];
   const web = Array.isArray(state.webSources) ? state.webSources : [];
-  showModal("Fontes", `<p class="modal-note">Arquivos locais e resultados web da resposta atual.</p><h3>Arquivos</h3><div>${local.length ? local.map((source, i) => `<div class="memory-row"><span>▤ ${escapeHtml(source.name)}</span><button data-source="${i}" type="button">×</button></div>`).join("") : "<p>Nenhum arquivo.</p>"}</div><h3>Web</h3><div>${web.length ? web.map(source => `<div class="memory-row"><span><strong>${escapeHtml(source.title)}</strong><br><small>${escapeHtml(source.url)}</small><br>${escapeHtml(source.snippet || "")}</span></div>`).join("") : "<p>Nenhuma pesquisa web nesta resposta.</p>"}</div><button class="primary wide" id="choose-source">＋ Adicionar arquivo</button>`);
+  const previous = Array.isArray(state.webPrevious) ? state.webPrevious : [];
+  const webRows = web.map(source => `<div class="memory-row"><span><strong>${escapeHtml(source.title)}</strong><br><a href="${escapeHtml(source.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(source.url)}</a><br>${escapeHtml(source.snippet || "")}</span></div>`).join("");
+  const previousRows = previous.map(item => `<div class="memory-row"><span><strong>Pesquisa anterior:</strong> ${escapeHtml(item.query)}<br>${(item.results || []).slice(0, 3).map(source => `<a href="${escapeHtml(source.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(source.title)}</a>`).join("<br>")}</span></div>`).join("");
+  showModal("Fontes", `<p class="modal-note">Arquivos locais, resultados web atuais e pesquisas anteriores relacionadas.</p><h3>Arquivos</h3><div>${local.length ? local.map((source, i) => `<div class="memory-row"><span>▤ ${escapeHtml(source.name)}</span><button data-source="${i}" type="button">×</button></div>`).join("") : "<p>Nenhum arquivo.</p>"}</div><h3>Web atual</h3><div>${webRows || "<p>Nenhuma pesquisa web nesta resposta.</p>"}</div><h3>Pesquisas anteriores</h3><div>${previousRows || "<p>Nenhuma pesquisa anterior relacionada.</p>"}</div><button class="primary wide" id="choose-source">＋ Adicionar arquivo</button>`);
   document.querySelectorAll("[data-source]").forEach(button => {
     button.onclick = async () => {
       const next = [...local];
