@@ -241,8 +241,8 @@ def api_health():
         ollama_ok = response.ok
     except requests.RequestException:
         ollama_ok = False
-    ready = mongo_ok and ollama_ok and (searxng_ok if SEARCH_ENABLED else True)
     searxng_ok = search_healthcheck() if SEARCH_ENABLED else False
+    ready = mongo_ok and ollama_ok and (searxng_ok if SEARCH_ENABLED else True)
     return jsonify({"status": "ok" if ready else "degraded", "mongodb": mongo_ok, "ollama": ollama_ok, "searxng": searxng_ok})
 
 
