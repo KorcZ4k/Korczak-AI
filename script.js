@@ -25,7 +25,7 @@ const modalContent = $("modal-content");
 const modalClose = $("modal-close");
 const fileInput = $("file-input");
 
-const state = { chats: [], activeId: null, activeChat: null, sending: false, user: null };
+const state = { chats: [], activeId: null, activeChat: null, sending: false, user: null, webSources: [] };
 
 function token() { return localStorage.getItem(TOKEN_KEY); }
 function authHeaders(json = false) {
@@ -197,6 +197,7 @@ async function openChat(id) {
     const item = await api(`/api/chats/${encodeURIComponent(id)}`);
     state.activeId = item.id;
     state.activeChat = item;
+    state.webSources = [];
     renderChatList();
     renderMessages(item.mensagens || []);
     setConversationTitle(item.nome);
@@ -266,6 +267,7 @@ async function streamResponse(messages, target) {
       for (const line of lines) {
         if (!line.trim()) continue;
         const chunk = JSON.parse(line);
+        if (Array.isArray(chunk?.sources)) state.webSources = chunk.sources;
         const piece = chunk?.message?.content || "";
         if (piece) {
           answer += piece;
