@@ -369,7 +369,8 @@ function sourcesModal() {
   const item = activeChat();
   if (!item) return;
   const local = Array.isArray(item.fontes) ? item.fontes : [];
-  showModal("Fontes", `<p class="modal-note">Arquivos locais usados pelo chat.</p><h3>Arquivos</h3><div>${local.length ? local.map((source, i) => `<div class="memory-row"><span>▤ ${escapeHtml(source.name)}</span><button data-source="${i}" type="button">×</button></div>`).join("") : "<p>Nenhum arquivo.</p>"}</div><button class="primary wide" id="choose-source">＋ Adicionar arquivo</button>`);
+  const web = Array.isArray(state.webSources) ? state.webSources : [];
+  showModal("Fontes", `<p class="modal-note">Arquivos locais e resultados web da resposta atual.</p><h3>Arquivos</h3><div>${local.length ? local.map((source, i) => `<div class="memory-row"><span>▤ ${escapeHtml(source.name)}</span><button data-source="${i}" type="button">×</button></div>`).join("") : "<p>Nenhum arquivo.</p>"}</div><h3>Web</h3><div>${web.length ? web.map(source => `<div class="memory-row"><span><strong>${escapeHtml(source.title)}</strong><br><small>${escapeHtml(source.url)}</small><br>${escapeHtml(source.snippet || "")}</span></div>`).join("") : "<p>Nenhuma pesquisa web nesta resposta.</p>"}</div><button class="primary wide" id="choose-source">＋ Adicionar arquivo</button>`);
   document.querySelectorAll("[data-source]").forEach(button => {
     button.onclick = async () => {
       const next = [...local];
@@ -380,7 +381,6 @@ function sourcesModal() {
   });
   $("choose-source").onclick = () => { closeModal(); fileInput.click(); };
 }
-
 async function handleFile(file) {
   if (!file || !state.activeId) return;
   if (file.size > 120000) throw new Error("O arquivo excede 120 KB.");
