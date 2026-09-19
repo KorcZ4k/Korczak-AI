@@ -186,13 +186,18 @@ def should_search(query):
     if not SEARCH_ENABLED or not query:
         return False
     q = str(query).casefold()
-    triggers = (
-        "pesquise", "pesquisa", "procure", "busque", "fonte", "fontes",
-        "link", "notícia", "noticias", "notícias", "hoje", "agora",
-        "atual", "atualmente", "último", "última", "últimos", "últimas",
-        "preço", "cotação", "recentemente", "quem é", "o que aconteceu",
+    explicit = (
+        "pesquise", "pesquisa", "procure", "busque", "buscar na web",
+        "pesquisar na web", "na internet", "na web", "web", "fonte", "fontes",
+        "link", "links", "url", "urls",
     )
-    return len(q) >= 4 and any(term in q for term in triggers)
+    freshness = (
+        "hoje", "agora", "atual", "atualmente", "recente", "recentemente",
+        "último", "última", "últimos", "últimas", "notícia", "noticias", "notícias",
+        "preço", "preços", "cotação", "cotacoes", "aconteceu",
+    )
+    question = any(q.startswith(prefix) for prefix in ("quem é", "o que é", "qual é", "quanto custa"))
+    return len(q) >= 4 and (any(term in q for term in explicit) or any(term in q for term in freshness) or question)
 
 
 @app.before_request
@@ -334,9 +339,12 @@ def read_chat(user, chat_id):
 @auth_required
 def patch_chat(user, chat_id):
     data = request.get_json(silent=True) or {}
+    doc, error = _user_doc(user)
+    if error or not doc:
+        return jsonify({"error": "Usuário não encontrado"}), 401
     allowed = {key: data[key] for key in ("nome", "instrucoes", "modelo", "memoria", "memoria_automatica", "fontes", "mensagens", "preferencias") if key in data}
     try:
-        chat = update_chat(chat_id, user, **allowed)
+        chat = update_chat(chat_id, user, user_id=str(doc["ID"]), **allowed)
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
     except Exception:
@@ -351,8 +359,11 @@ def patch_chat(user, chat_id):
 @app.delete("/api/chats/<chat_id>")
 @auth_required
 def remove_chat(user, chat_id):
+    doc, error = _user_doc(user)
+    if error or not doc:
+        return jsonify({"error": "Usuário não encontrado"}), 401
     try:
-        deleted = delete_chat(chat_id, user)
+        deleted = delete_chat(chat_id, user, str(doc["ID"]))
     except Exception:
         app.logger.exception("Chat deletion failed")
         return jsonify({"error": "Falha ao excluir chat"}), 503
@@ -373,11 +384,19 @@ def search_endpoint(user):
     query = str(data.get("query", "")).strip()[:500]
     if not query:
         return jsonify({"error": "query é obrigatória"}), 400
+    chat_id = str(data.get("chat_id", "")).strip() or None
     doc, error = _user_doc(user)
     if error or not doc:
         return jsonify({"error": "Usuário não encontrado"}), 401
+    if chat_id:
+        try:
+            if not get_chat(chat_id, user, str(doc["ID"])):
+                return jsonify({"error": "Chat não encontrado"}), 404
+        except Exception:
+            app.logger.exception("Search chat ownership check failed")
+            return jsonify({"error": "Falha ao validar chat"}), 503
     try:
-        result = search_and_store(query, str(doc["ID"]), str(data.get("chat_id", "")).strip() or None)
+        result = search_and_store(query, str(doc["ID"]), chat_id)
     except Exception as exc:
         audit("web_search_error", user=user, reason="searxng_failed", metadata={"error": str(exc)[:300]})
         return jsonify({"error": "Serviço de busca indisponível"}), 503
