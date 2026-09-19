@@ -24,7 +24,7 @@ Defina no ambiente do serviço backend:
 - `OLLAMA_BASE_URL` — URL privada do Ollama
 - `FRONTEND_ORIGIN` — origem exata do frontend; não use `*` em produção
 - `MODEL`, `MODEL_CONTEXT` e `MODEL_TEMPERATURE` conforme o servidor de inferência
-- `AUTH_TOKEN_MAX_AGE`, `MAX_BODY_BYTES`, `LOGIN_RATE_LIMIT`, `CHAT_RATE_LIMIT`, `SEARCH_RATE_LIMIT` e `RATE_WINDOW` conforme a capacidade do serviço
+- `AUTH_TOKEN_MAX_AGE`, `MAX_BODY_BYTES`, `LOGIN_RATE_LIMIT`, `CHAT_RATE_LIMIT` e `RATE_WINDOW` conforme a capacidade do serviço
 
 A API falha no boot se os segredos ou endpoints obrigatórios não estiverem configurados em produção. Isso é intencional: configuração incompleta não deve parecer uma implantação saudável.
 
